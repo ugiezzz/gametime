@@ -1,0 +1,178 @@
+# Product Requirements Document (PRD) for GameTime App
+
+## 1. Document Overview
+### 1.1 Purpose
+This PRD outlines the detailed requirements for building "GameTime," a cross-platform mobile app for iOS and Android using React Native with Expo. The app allows gamers to ping friends in groups for quick play coordination across any game, with limited responses. The PRD is designed for an AI agent to develop the app iteratively, providing clear requirements and an ordered execution plan.
+
+### 1.2 Scope
+- **In Scope**: User authentication, contacts access, group creation/management, ping functionality with game name input and notifications, real-time response updates, native permissions.
+- **Out of Scope**: Media sharing, text messaging, custom profiles, location sharing, monetization, additional features like ping history.
+
+### 1.3 Assumptions
+- Backend: Use Firebase for authentication, real-time database, and cloud messaging (compatible with Expo).
+- App is free.
+- Target: iOS 14+ and Android 10+.
+- Base Boilerplate: Use https://github.com/ixartz/React-Native-Boilerplate as the starting point, leveraging Expo, TypeScript, NativeWind for styling, Expo Router for navigation, and pre-configured testing/linting.
+
+## 2. Product Overview
+### 2.1 Problem Statement
+Gamers need a simple way to coordinate sessions for any game without chat noise. Ping limits interactions to pings and predefined responses, with game-specific invites.
+
+### 2.2 Value Proposition
+- Focused invites with quick responses for any game.
+- Real-time updates.
+- Simple, clean UI for general gaming.
+
+### 2.3 Target Audience
+Gamers for casual or competitive coordination across various games.
+
+## 3. Features
+### 3.1 Must-Have Features
+1. **User Authentication**
+   - Phone number verification using Firebase Auth (OTP).
+   - Auto-login on relaunch.
+
+2. **Permissions**
+   - Request access to contacts and notifications on first launch (use Expo's notification APIs for simplicity).
+
+3. **Contacts Integration**
+   - Fetch and display phone contacts (use react-native-contacts).
+   - Use contact names for display; no custom profiles.
+
+4. **Group Creation and Management**
+   - Create groups by selecting contacts and adding a name.
+   - Store groups in Firebase Realtime Database.
+   - Admin (creator) can add/remove members; users can leave groups.
+   - Assume contacts are app users (match by phone number).
+
+5. **Home Screen**
+   - List of user's groups with last ping timestamp.
+
+6. **Group Detail Screen**
+   - Large central "Ping" button.
+   - On ping click: Prompt user to enter game name (text input), then send.
+   - Real-time display of member responses below the button, including the game name for the current ping.
+
+7. **Ping Functionality**
+   - After entering game name, send push notification to group members via Firebase Cloud Messaging (or Expo Notifications for cross-platform ease).
+   - Notification: "[Group Name] Ping: Ready to play [Game Name]?" with quick reply options.
+
+8. **Response Functionality**
+   - Predefined options: "Yes", "Coming now", "5 min", "10 min", "20 min", "Later", "Not today".
+   - Support quick replies from notification or in-app buttons.
+   - Store and update responses in real-time using Firebase.
+   - Display: Member name + response + timestamp (with game name shown at the top of responses).
+   - Auto-clear responses after 24 hours or on new ping.
+
+9. **Offline Support**
+   - Cache data locally (AsyncStorage).
+   - Sync on reconnect.
+
+### 3.2 Should-Have Features
+1. **Error Handling**
+   - Offline mode with queued actions.
+   - Permission denials with fallbacks (e.g., manual phone entry for groups).
+
+## 4. User Flows
+### 4.1 Onboarding
+1. Launch → Request permissions.
+2. Enter phone → OTP verification.
+3. Home screen (prompt to create group if empty).
+
+### 4.2 Create Group
+1. From home: Select contacts → Enter name → Create → View group.
+
+### 4.3 Send Ping
+1. Enter group → Click "Ping" → Enter game name → Confirm.
+2. Notifications sent; responses update live, showing game name.
+
+### 4.4 Receive and Respond
+1. Notification received (includes game name) → Quick reply or open app.
+2. Select response → Update visible to all.
+
+## 5. Design Guidelines
+- **Style**: Simple, clean, general gaming theme – Neutral colors (e.g., dark grays, whites), minimal icons, nothing fancy.
+- **UI Elements**:
+  - "Ping" button: Large (e.g., full-width, prominent), centered, basic styling.
+  - Screens: Simple navigation (home list → group detail).
+  - Colors: Primary #333333 (dark gray), Accent #FFFFFF (white), Button #007BFF (blue).
+  - Fonts: System sans-serif, bold for buttons.
+  - Icons: Simple line icons (e.g., from Expo Vector Icons).
+- **Accessibility**: High contrast, screen reader support.
+- **Implementation**: Use NativeWind (Tailwind CSS classes from boilerplate) for styling; keep classes minimal and utility-based.
+
+## 6. Technical Requirements
+### 6.1 Tech Stack
+- Framework: React Native with Expo (from boilerplate).
+- Backend: Firebase (Auth, Realtime Database, Cloud Messaging; integrate with Expo).
+- Libraries (Leverage Boilerplate):
+  - Navigation: Expo Router (file-based routing).
+  - Styling: NativeWind (Tailwind CSS).
+  - Testing: Jest, Detox.
+  - Additional: react-native-permissions, @react-native-firebase (or Expo Notifications), react-native-contacts, AsyncStorage.
+- State: Context API or Redux (add if needed; boilerplate doesn't pre-configure).
+- Platform Adaptations: Use Platform.OS for iOS/Android differences; Expo handles much cross-platform.
+
+### 6.2 Data Model
+- User: { id: string, phone: string }
+- Group: { id: string, name: string, members: array of userIds, lastPing: timestamp }
+- Ping: { id: string, groupId: string, initiatorId: string, gameName: string, timestamp: number }
+- PingResponse: { pingId: string, userId: string, response: string, timestamp: number }
+
+### 6.3 Security and Performance
+- Use Firebase security rules for data access.
+- Enable offline persistence in Firebase.
+- Optimize real-time listeners to avoid excessive reads.
+
+## 7. Order of Execution for AI Agent Development
+Follow this sequential order to build the app iteratively. Start from the boilerplate (clone and setup). Each step includes clear tasks; generate code, test, and refine before proceeding.
+
+1. **Project Setup**
+   - Clone boilerplate: git clone --depth=1 https://github.com/ixartz/React-Native-Boilerplate.git ping-app
+   - Install dependencies: cd ping-app && npm install
+   - Configure Firebase (add config to env file; integrate with Expo).
+   - Set up basic structure with Expo Router.
+
+2. **Authentication Implementation**
+   - Build auth routes/screens: Phone input, OTP verification.
+   - Integrate Firebase Auth.
+   - Handle auto-login.
+
+3. **Permissions and Contacts**
+   - Implement permission requests (use Expo APIs where possible).
+   - Fetch and display contacts.
+   - Handle denials with fallbacks.
+
+4. **Group Creation and List**
+   - Build home route: Group list from Firebase.
+   - Create group functionality: Select contacts, save to DB.
+   - Implement group management (add/remove/leave).
+
+5. **Group Detail Screen**
+   - Build UI: "Ping" button, response list (use Tailwind classes).
+   - Set up real-time listeners for responses.
+   - Add game name input prompt on ping click.
+
+6. **Ping and Notifications**
+   - Implement "Ping" action: Prompt game name, send FCM/Expo notifications.
+   - Configure notification handling (foreground/background; use Expo Notifications for simplicity).
+
+7. **Response Handling**
+   - Add quick response options (in-app and notification).
+   - Store and broadcast responses in real-time.
+   - Implement auto-clear logic.
+   - Ensure game name displays in notifications and responses.
+
+8. **Offline and Error Handling**
+   - Add local caching.
+   - Queue actions for offline.
+   - Add UI for errors/offline status.
+
+9. **UI Polish and Testing**
+   - Apply design guidelines (simple Tailwind styles).
+   - Test with Jest/Detox on emulators/devices for iOS and Android.
+   - Handle edge cases (e.g., no groups, denied permissions).
+
+10. **Build and Release Preparation**
+    - Generate builds with Expo (eas build).
+    - Ensure adaptations for app stores (e.g., icons, descriptions).
