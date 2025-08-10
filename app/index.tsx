@@ -2,15 +2,20 @@
 import { useEffect } from 'react';
 import { View, Text } from 'react-native';
 import { router } from 'expo-router';
+import { CustomAuthService } from '@/services/customAuthService';
+import { NotificationService } from '@/services/notificationService';
 
 export default function Index() {
   useEffect(() => {
-    // Redirect to auth flow
-    const timer = setTimeout(() => {
-      router.push('/auth/phone');
-    }, 500);
+    // Navigate after Firebase rehydrates auth (persistent session)
+    const unsubscribe = CustomAuthService.onAuthStateChanged((user) => {
+      router.replace(user ? '/(tabs)' : '/auth/phone');
+    });
 
-    return () => clearTimeout(timer);
+    // Best-effort push token registration early
+    NotificationService.registerPushTokenAsync().catch(() => {});
+
+    return unsubscribe;
   }, []);
 
   return (

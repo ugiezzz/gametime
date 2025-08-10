@@ -3,6 +3,7 @@ import { NativeWindStyleSheet } from 'nativewind';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
+import { NotificationService } from '@/services/notificationService';
 
 NativeWindStyleSheet.setOutput({
   default: 'native',
@@ -29,6 +30,9 @@ export default function Layout() {
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
       console.log('Notification response:', response);
     });
+
+    // Register device push token for the signed-in user
+    NotificationService.registerPushTokenAsync().catch(() => {});
 
     return () => {
       subscription.remove();

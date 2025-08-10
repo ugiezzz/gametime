@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FirebaseGroupService, Group } from '@/services/firebaseGroupService';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function GroupsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -12,6 +13,13 @@ export default function GroupsScreen() {
   useEffect(() => {
     loadGroups();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadGroups();
+      return () => {};
+    }, [])
+  );
 
   const loadGroups = async () => {
     try {
@@ -79,8 +87,22 @@ export default function GroupsScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-900">
-        <Text className="text-white text-lg">Loading groups...</Text>
+      <View className="flex-1 justify-center items-center bg-gray-900 px-6">
+        <Text className="text-white text-lg mb-6">Loading groups...</Text>
+        <View className="w-full">
+          <TouchableOpacity
+            className="bg-blue-600 p-4 rounded-lg mb-3"
+            onPress={handleCreateGroup}
+          >
+            <Text className="text-white text-center font-bold">Create Group</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            className="bg-gray-700 p-4 rounded-lg"
+            onPress={loadGroups}
+          >
+            <Text className="text-white text-center font-bold">Retry Loading</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     );
   }

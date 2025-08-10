@@ -22,4 +22,4 @@ const auth = initializeAuth(app, {
 const db = getFirestore(app); // Firestore
 const database = getDatabase(app); // Realtime Database
 
-export { auth, db, database, signInWithCustomToken }; 
+export { auth, db, database, signInWithCustomToken }; Untitled.jpeg

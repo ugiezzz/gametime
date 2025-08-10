@@ -1,6 +1,19 @@
-const { initializeApp } = require('firebase/app');
-const { getAuth, signInAnonymously, signOut } = require('firebase/auth');
-const { getDatabase, ref, set, get, remove } = require('firebase/database');
+// Use dynamic imports to work with ESM-only Firebase v12
+let initializeApp, getAuth, signInAnonymously, signOut, getDatabase, ref, set, get, remove;
+async function loadFirebase() {
+  const appMod = await import('firebase/app');
+  const authMod = await import('firebase/auth');
+  const dbMod = await import('firebase/database');
+  initializeApp = appMod.initializeApp;
+  getAuth = authMod.getAuth;
+  signInAnonymously = authMod.signInAnonymously;
+  signOut = authMod.signOut;
+  getDatabase = dbMod.getDatabase;
+  ref = dbMod.ref;
+  set = dbMod.set;
+  get = dbMod.get;
+  remove = dbMod.remove;
+}
 
 // Firebase configuration
 const firebaseConfig = {
@@ -16,10 +29,7 @@ const firebaseConfig = {
 
 console.log('🔥 Starting Firebase Tests...\n');
 
-// Initialize Firebase
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const database = getDatabase(app);
+let app, auth, database;
 
 const testResults = {
   config: false,
@@ -30,6 +40,11 @@ const testResults = {
 };
 
 async function runTests() {
+  await loadFirebase();
+  // Initialize Firebase
+  app = initializeApp(firebaseConfig);
+  auth = getAuth(app);
+  database = getDatabase(app);
   console.log('📋 Test Results:\n');
 
   // Test 1: Configuration
@@ -55,44 +70,50 @@ async function runTests() {
     console.log(`   Error: ${error.message}`);
   }
 
-  // Test 3: Database Connection
+  // Prepare paths and data that are allowed by secure RTDB rules
+  const tempGroupId = `test-${Math.random().toString(36).slice(2, 10)}`;
+  const tempGroupRef = ref(database, `groups/${tempGroupId}`);
+
+  // Test 3: Create group (allowed if createdBy === auth.uid)
   try {
-    console.log('\n✅ Test 3: Database Connection');
-    const testRef = ref(database, 'test/connection');
-    await set(testRef, { message: 'Connection test', timestamp: new Date().toISOString() });
+    console.log('\n✅ Test 3: Database Write (Create Group)');
+    const nowIso = new Date().toISOString();
+    const userCredential = await signInAnonymously(auth);
+    const uid = userCredential.user.uid;
+    const groupPayload = {
+      id: tempGroupId,
+      name: 'Test Group',
+      createdBy: uid,
+      createdAt: nowIso,
+      members: { [uid]: true }
+    };
+    await set(tempGroupRef, groupPayload);
     testResults.database = true;
-    console.log('   Database connection successful');
+    testResults.write = true;
+    console.log('   Group created successfully');
   } catch (error) {
-    console.log('\n❌ Test 3: Database Connection - FAILED');
+    console.log('\n❌ Test 3: Database Write (Create Group) - FAILED');
     console.log(`   Error: ${error.message}`);
-    console.log('   💡 Make sure Realtime Database is enabled in Firebase Console');
   }
 
-  // Test 4: Database Write
-  if (testResults.database) {
+  // Test 4: Update group field (creator/admin-only)
+  if (testResults.write) {
     try {
-      console.log('\n✅ Test 4: Database Write');
-      const testData = {
-        message: 'Hello from GameTime!',
-        timestamp: new Date().toISOString(),
-        testId: Math.random().toString(36).substr(2, 9)
-      };
-      const testRef = ref(database, `test/${testData.testId}`);
-      await set(testRef, testData);
-      testResults.write = true;
-      console.log('   Data written successfully');
+      console.log('\n✅ Test 4: Database Update');
+      const nowIso = new Date().toISOString();
+      await set(ref(database, `groups/${tempGroupId}/lastPing`), nowIso);
+      console.log('   Group updated successfully');
     } catch (error) {
-      console.log('\n❌ Test 4: Database Write - FAILED');
+      console.log('\n❌ Test 4: Database Update - FAILED');
       console.log(`   Error: ${error.message}`);
     }
   }
 
-  // Test 5: Database Read
+  // Test 5: Database Read (group)
   if (testResults.write) {
     try {
       console.log('\n✅ Test 5: Database Read');
-      const testRef = ref(database, 'test/connection');
-      const snapshot = await get(testRef);
+      const snapshot = await get(tempGroupRef);
       if (snapshot.exists()) {
         testResults.read = true;
         console.log('   Data read successfully');
@@ -134,10 +155,9 @@ async function runTests() {
     }
   }
 
-  // Cleanup
+  // Cleanup: remove temp group
   try {
-    const testRef = ref(database, 'test/connection');
-    await remove(testRef);
+    await remove(tempGroupRef);
   } catch (error) {
     // Ignore cleanup errors
   }

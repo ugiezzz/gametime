@@ -14,12 +14,26 @@ export class CustomAuthService {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to send OTP');
+        let message = 'Failed to send OTP';
+        try {
+          const text = await response.text();
+          // Some backends return JSON, others plain text; show whichever exists
+          if (text) {
+            try {
+              const data = JSON.parse(text);
+              message = data.error || data.message || text;
+            } catch {
+              message = text;
+            }
+          }
+        } catch {}
+        throw new Error(message);
       }
 
       return 'OTP sent successfully';
     } catch (error) {
       console.error('Error sending OTP:', error);
+      if (error instanceof Error) throw error;
       throw new Error('Failed to send OTP. Please try again.');
     }
   }
@@ -34,8 +48,19 @@ export class CustomAuthService {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to verify OTP');
+        let message = 'Failed to verify OTP';
+        try {
+          const text = await response.text();
+          if (text) {
+            try {
+              const data = JSON.parse(text);
+              message = data.error || data.message || text;
+            } catch {
+              message = text;
+            }
+          }
+        } catch {}
+        throw new Error(message);
       }
 
       const { token } = await response.json();
@@ -43,6 +68,7 @@ export class CustomAuthService {
       return result.user;
     } catch (error) {
       console.error('Error verifying OTP:', error);
+      if (error instanceof Error) throw error;
       throw new Error('Invalid OTP. Please try again.');
     }
   }

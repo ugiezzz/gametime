@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Contacts from 'expo-contacts';
+import { normalizePhoneNumber, getDefaultRegion } from '@/services/phoneUtil';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
@@ -94,11 +95,16 @@ export default function CreateGroupScreen() {
 
     setCreating(true);
     try {
+      const normalizePhone = (raw?: string) => {
+        if (!raw) return '';
+        const norm = normalizePhoneNumber(raw, getDefaultRegion());
+        return norm.e164 || '';
+      };
+
       const members = selectedContacts.map(contact => ({
         id: contact.id,
         name: contact.name,
-        phoneNumber: contact.phoneNumbers?.[0] || '',
-        userId: undefined, // Will be set when users join with their Firebase accounts
+        phoneNumber: normalizePhone(contact.phoneNumbers?.[0]),
       }));
 
       await FirebaseGroupService.createGroup(groupName.trim(), members);
@@ -106,7 +112,8 @@ export default function CreateGroupScreen() {
       router.back();
     } catch (error) {
       console.error('Failed to create group:', error);
-      Alert.alert('Error', 'Failed to create group. Please try again.');
+      const message = error instanceof Error ? error.message : 'Failed to create group. Please try again.';
+      Alert.alert('Error', message);
     } finally {
       setCreating(false);
     }
@@ -146,37 +153,33 @@ export default function CreateGroupScreen() {
   return (
     <View className="flex-1 bg-gray-900">
       <View className="p-4 border-b border-gray-700">
-        <Text className="text-white text-xl font-bold mb-4">Create New Group</Text>
-        
         <TextInput
-          className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg mb-4"
+          className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
           placeholder="Enter group name"
           placeholderTextColor="#9CA3AF"
           value={groupName}
           onChangeText={setGroupName}
         />
-
-        {/* Search Bar */}
-        <View className="relative">
-          <TextInput
-            className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg pl-10"
-            placeholder="Search contacts..."
-            placeholderTextColor="#9CA3AF"
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-          />
-          <Ionicons 
-            name="search" 
-            size={20} 
-            color="#9CA3AF" 
-            style={{ position: 'absolute', left: 12, top: 14 }}
-          />
-        </View>
       </View>
 
       <View className="flex-1">
         <View className="p-4 border-b border-gray-700">
-          <Text className="text-white text-lg font-semibold mb-2">Select Contacts</Text>
+          <Text className="text-white text-lg font-semibold mb-3">Select Contacts</Text>
+          <View className="relative mb-2">
+            <TextInput
+              className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg pl-10"
+              placeholder="Search contacts..."
+              placeholderTextColor="#9CA3AF"
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+            />
+            <Ionicons 
+              name="search" 
+              size={20} 
+              color="#9CA3AF" 
+              style={{ position: 'absolute', left: 12, top: 14 }}
+            />
+          </View>
           <Text className="text-gray-400 text-sm">
             {contacts.filter(c => c.selected).length} selected • {filteredContacts.length} contacts
           </Text>

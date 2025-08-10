@@ -2,12 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
-import * as Localization from 'expo-localization';
 import { CustomAuthService } from '@/services/customAuthService';
+import { getDefaultRegion, normalizePhoneNumber, formatExamplePlaceholder } from '@/services/phoneUtil';
 
-function inferCountryCode(): string {
-  const region = Localization.region || '';
-  // Simple map; expand as needed
+function inferCountryCode(regionInput?: string): string {
+  // Minimal map for prefix in placeholder; final normalization is library-based
+  const region = regionInput || getDefaultRegion();
   const map: Record<string, string> = {
     IL: '+972',
     US: '+1',
@@ -16,17 +16,22 @@ function inferCountryCode(): string {
     DE: '+49',
     FR: '+33',
   };
-  return map[region] || '+1';
+  return map[region as keyof typeof map] || '+1';
 }
 
 export default function PhoneScreen() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
-  const [defaultCode, setDefaultCode] = useState(inferCountryCode());
+  const region = getDefaultRegion();
+  const defaultCode = inferCountryCode(region);
 
   useEffect(() => {
     requestPermissions();
-    checkAuthState();
+    // Redirect to home if auth is restored while this screen is visible
+    const unsubscribe = CustomAuthService.onAuthStateChanged((user) => {
+      if (user) router.replace('/(tabs)');
+    });
+    return () => unsubscribe();
   }, []);
 
   const requestPermissions = async () => {
@@ -40,30 +45,20 @@ export default function PhoneScreen() {
     }
   };
 
-  const checkAuthState = () => {
-    if (CustomAuthService.isAuthenticated()) {
-      console.log('User already authenticated');
-      router.replace('/(tabs)');
-    }
-  };
+  // removed synchronous check; we rely on the auth listener above
 
   const handleSendOTP = async () => {
-    const raw = phoneNumber.trim();
-    const hasPlus = raw.startsWith('+');
-    const normalized = hasPlus ? raw : `${defaultCode}${raw.replace(/\D/g, '')}`;
-
-    if (!normalized || normalized.length < 10) {
+    const { e164, isValid } = normalizePhoneNumber(phoneNumber, region);
+    if (!isValid || !e164) {
       Alert.alert('Invalid Phone Number', 'Please enter a valid phone number');
       return;
     }
 
     setLoading(true);
     try {
-      console.log('Sending OTP to:', normalized);
-      await CustomAuthService.sendOTP(normalized);
-
-      Alert.alert('Success', 'OTP sent to your phone number!');
-      router.push({ pathname: '/auth/otp', params: { phoneNumber: normalized } });
+      console.log('Sending OTP to:', e164);
+      await CustomAuthService.sendOTP(e164);
+      router.push({ pathname: '/auth/otp', params: { phoneNumber: e164 } });
     } catch (error) {
       console.error('Auth error:', error);
       Alert.alert('Error', 'Failed to send OTP. Please try again.');
@@ -80,7 +75,7 @@ export default function PhoneScreen() {
       <View className="w-full mb-6">
         <TextInput
           className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
-          placeholder={`e.g. ${defaultCode} 5551234567`}
+          placeholder={`e.g. ${defaultCode} ${formatExamplePlaceholder(region)}`}
           placeholderTextColor="#9CA3AF"
           value={phoneNumber}
           onChangeText={setPhoneNumber}
@@ -94,7 +89,7 @@ export default function PhoneScreen() {
         onPress={handleSendOTP}
         disabled={loading}
       >
-        <Text className="text-white text-center font-bold text-lg">{loading ? 'Verifying...' : 'Continue'}</Text>
+        <Text className="text-white text-center font-bold text-lg">{loading ? 'Sending…' : 'Next'}</Text>
       </TouchableOpacity>
     </View>
   );
