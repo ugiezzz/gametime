@@ -63,27 +63,30 @@ export default function GroupsScreen() {
     return 'Just now';
   };
 
-  const renderGroupItem = ({ item }: { item: Group }) => (
-    <TouchableOpacity
-      className="bg-gray-800 p-4 rounded-lg mb-3 mx-4"
-      onPress={() => handleGroupPress(item.id)}
-    >
-      <View className="flex-row justify-between items-center">
-        <View className="flex-1">
-          <Text className="text-white text-lg font-bold">{item.name}</Text>
-          <Text className="text-gray-400 text-sm">
-            {item.members.length} members
-          </Text>
+  const renderGroupItem = ({ item }: { item: Group }) => {
+    const memberCount = item.membersByUid
+      ? Object.keys(item.membersByUid).length
+      : Array.isArray((item as any).members)
+      ? ((item as any).members as any[]).length
+      : 0;
+    return (
+      <TouchableOpacity
+        className="bg-gray-800 p-4 rounded-lg mb-3 mx-4"
+        onPress={() => handleGroupPress(item.id)}
+      >
+        <View className="flex-row justify-between items-center">
+          <View className="flex-1">
+            <Text className="text-white text-lg font-bold">{item.name}</Text>
+            <Text className="text-gray-400 text-sm">{memberCount} members</Text>
+          </View>
+          <View className="items-end">
+            <Text className="text-gray-400 text-sm">{formatLastPing(item.lastPing)}</Text>
+            <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
+          </View>
         </View>
-        <View className="items-end">
-          <Text className="text-gray-400 text-sm">
-            {formatLastPing(item.lastPing)}
-          </Text>
-          <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (

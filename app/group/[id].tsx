@@ -6,7 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 // import { NotificationService } from '@/services/notificationService';
 import { FirebaseGroupService, Group } from '@/services/firebaseGroupService';
 import type { Ping } from '@/services/firebaseGroupService';
-import { auth } from '@/config/firebase';
+import { auth, database } from '@/config/firebase';
+import { ref, get } from 'firebase/database';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
 // Response type removed (to be reintroduced when wiring responses)
@@ -20,6 +21,8 @@ export default function GroupDetailScreen() {
   const [pings, setPings] = useState<Ping[]>([]);
   // responses removed until wired to backend
   const [loading, setLoading] = useState(true);
+  const [memberUids, setMemberUids] = useState<string[]>([]);
+  const [uidToName, setUidToName] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!FirebaseAuthService.isAuthenticated()) {
@@ -65,6 +68,37 @@ export default function GroupDetailScreen() {
     return unsubscribe;
   };
 
+  // Derive member UIDs from group and resolve names from users/{uid}
+  useEffect(() => {
+    const resolveNames = async () => {
+      if (!group) return;
+      const uids: string[] = group.membersByUid
+        ? Object.keys(group.membersByUid)
+        : Array.isArray((group as any).members)
+        ? ((group as any).members as Array<{ id: string }>).map((m) => m.id)
+        : [];
+      setMemberUids(uids);
+
+      const entries = await Promise.all(
+        uids.map(async (uid) => {
+          try {
+            const snap = await get(ref(database, `users/${uid}`));
+            const name = snap.exists() && snap.val()?.displayName ? String(snap.val().displayName) : 'Member';
+            return [uid, name] as [string, string];
+          } catch {
+            return [uid, 'Member'] as [string, string];
+          }
+        })
+      );
+      const map: Record<string, string> = Object.fromEntries(entries);
+      const viewerUid = auth.currentUser?.uid;
+      if (viewerUid && !map[viewerUid]) map[viewerUid] = 'You';
+      if (group.createdBy && !map[group.createdBy]) map[group.createdBy] = 'Creator';
+      setUidToName(map);
+    };
+    resolveNames();
+  }, [group]);
+
   const handlePing = async (scheduledAtMs?: number) => {
     if (!group) return;
 
@@ -100,13 +134,13 @@ export default function GroupDetailScreen() {
     <SafeAreaView className="flex-1 bg-gray-900">
       <Stack.Screen
         options={{
-          headerTitle: () => (group ? <HeaderTitle group={group} /> : null),
+          headerTitle: () => (group ? <HeaderTitle group={group} memberUids={memberUids} uidToName={uidToName} /> : null),
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
               <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
             </TouchableOpacity>
           ),
-          headerRight: () => (group ? <MenuButton groupId={group.id} group={group} /> : null),
+          headerRight: () => (group ? <MenuButton groupId={group.id} group={group} memberUids={memberUids} uidToName={uidToName} /> : null),
           headerStyle: { backgroundColor: '#111827' },
           headerTintColor: '#E5E7EB',
         }}
@@ -125,8 +159,8 @@ export default function GroupDetailScreen() {
           {pings.length > 0 && (
             <>
               <Text className="text-white text-lg font-semibold mb-2">Active Pings</Text>
-              {pings.map((ping) => (
-                <PingCard key={ping.id} ping={ping} group={group} groupId={group.id} />
+                  {pings.map((ping) => (
+                <PingCard key={ping.id} ping={ping} group={group} groupId={group.id} memberUids={memberUids} uidToName={uidToName} />
               ))}
             </>
           )}
@@ -156,7 +190,7 @@ function formatAbsoluteTime(dateMs: number): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function PingCard({ ping, group, groupId }: { ping: any; group: Group; groupId: string }) {
+function PingCard({ ping, group, groupId, memberUids, uidToName }: { ping: any; group: Group; groupId: string; memberUids: string[]; uidToName: Record<string, string> }) {
   const createdAt = ping.createdAtMs as number;
   // Use scheduled time if present; else fall back to createdAt
   const baseTimeMs: number = typeof ping.scheduledAtMs === 'number' ? (ping.scheduledAtMs as number) : createdAt;
@@ -172,16 +206,16 @@ function PingCard({ ping, group, groupId }: { ping: any; group: Group; groupId: 
   const nextRound: string[] = [];
   const declined: string[] = [];
   const pending: string[] = [];
-  const uidToName = new Map<string, string>();
-  for (const m of group.members) uidToName.set(m.id, m.name);
+  const nameMap = new Map<string, string>();
+  for (const uid of memberUids) nameMap.set(uid, uidToName[uid] || 'Member');
   const viewerUid = auth.currentUser?.uid;
-  if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
-  if (group.createdBy && !uidToName.has(group.createdBy)) uidToName.set(group.createdBy, 'Creator');
+  if (viewerUid && !nameMap.has(viewerUid)) nameMap.set(viewerUid, 'You');
+  if (group.createdBy && !nameMap.has(group.createdBy)) nameMap.set(group.createdBy, 'Creator');
 
-  const allUids = new Set<string>([...Object.keys(responses), ...group.members.map((m) => m.id)]);
+  const allUids = new Set<string>([...Object.keys(responses), ...memberUids]);
   const selectedTargets: number[] = [];
   for (const uid of allUids) {
-    const name = uidToName.get(uid) || 'Member';
+    const name = nameMap.get(uid) || 'Member';
     const r = responses[uid];
     if (!r) { pending.push(name); continue; }
     if (r.status === 'declined') { declined.push(name); continue; }
@@ -305,14 +339,14 @@ function TextButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-function HeaderTitle({ group }: { group: Group }) {
+function HeaderTitle({ group, memberUids, uidToName }: { group: Group; memberUids: string[]; uidToName: Record<string, string> }) {
   return (
     <View>
       <Text className="text-white text-base font-semibold" numberOfLines={1}>
         {group.name}
       </Text>
       <Text className="text-gray-400 text-xs" numberOfLines={1} ellipsizeMode="tail">
-        {group.members.map((m) => m.name).join(', ')}
+        {memberUids.map((uid) => uidToName[uid] || 'Member').join(', ')}
       </Text>
     </View>
   );
@@ -379,7 +413,7 @@ function SchedulePing({ onSend }: { onSend: (scheduledAtMs?: number) => Promise<
   );
 }
 
-function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
+function MenuButton({ groupId, group, memberUids, uidToName }: { groupId: string; group: Group; memberUids: string[]; uidToName: Record<string, string> }) {
   const [open, setOpen] = React.useState(false);
   const isCreator = (uid?: string) => uid && uid === group.createdBy;
   const currentUserId = auth.currentUser?.uid;
@@ -424,9 +458,9 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
                   {canManage && (
                     <>
                       <View className="h-[1px] bg-gray-700 my-1" />
-                      {group.members.map((m) => (
-                        <TouchableOpacity key={m.id} className="py-2" onPress={() => handleRemoveMember(m.id)}>
-                          <Text className="text-white text-sm">Remove {m.name}</Text>
+                      {memberUids.map((uid) => (
+                        <TouchableOpacity key={uid} className="py-2" onPress={() => handleRemoveMember(uid)}>
+                          <Text className="text-white text-sm">Remove {uidToName[uid] || 'Member'}</Text>
                         </TouchableOpacity>
                       ))}
                     </>

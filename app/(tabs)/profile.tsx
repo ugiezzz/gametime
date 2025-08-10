@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CustomAuthService } from '@/services/customAuthService';
 import { auth, database } from '@/config/firebase';
 import { ref, onValue, get } from 'firebase/database';
+import { FirebaseGroupService } from '@/services/firebaseGroupService';
 
 export default function ProfileScreen() {
   const [displayName, setDisplayName] = useState<string | null>(null);
   const [phoneNumber, setPhoneNumber] = useState<string | null>(null);
   const [debugOutput, setDebugOutput] = useState<string>('');
+  const [editing, setEditing] = useState(false);
+  const [nameInput, setNameInput] = useState('');
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -21,6 +25,7 @@ export default function ProfileScreen() {
         const val = snapshot.val() as { displayName?: string; phoneNumber?: string };
         setDisplayName(val.displayName || null);
         setPhoneNumber(val.phoneNumber || null);
+        if (!editing) setNameInput(val.displayName || '');
       }
     });
 
@@ -52,6 +57,33 @@ export default function ProfileScreen() {
   };
 
   const isOwner = phoneNumber === '+972502525177';
+
+  const startEdit = () => {
+    setNameInput(displayName || '');
+    setEditing(true);
+  };
+
+  const cancelEdit = () => {
+    setEditing(false);
+    setNameInput(displayName || '');
+  };
+
+  const saveName = async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) {
+      Alert.alert('Invalid name', 'Name cannot be empty');
+      return;
+    }
+    try {
+      setSaving(true);
+      await FirebaseGroupService.updateCurrentUserDisplayName(trimmed);
+      setEditing(false);
+    } catch (e: any) {
+      Alert.alert('Failed to save', e?.message || 'Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const runMembershipDiagnostics = async () => {
     try {
@@ -87,6 +119,32 @@ export default function ProfileScreen() {
           <Text className="text-white text-xl font-bold">{displayName || phoneNumber || '—'}</Text>
           <Text className="text-gray-400 mt-1">{phoneNumber || '—'}</Text>
         </View>
+        {!editing ? (
+          <TouchableOpacity className="mt-3 self-center bg-blue-600 px-4 py-2 rounded" onPress={startEdit}>
+            <Text className="text-white font-semibold">Edit name</Text>
+          </TouchableOpacity>
+        ) : (
+          <View className="mt-4">
+            <Text className="text-gray-300 mb-2">Display name</Text>
+            <TextInput
+              className="bg-gray-900 text-white p-3 rounded border border-gray-700"
+              placeholder="Your name"
+              placeholderTextColor="#9CA3AF"
+              value={nameInput}
+              onChangeText={setNameInput}
+              editable={!saving}
+            />
+            <View className="flex-row mt-3">
+              <TouchableOpacity className="bg-gray-700 px-4 py-2 rounded mr-3" onPress={cancelEdit} disabled={saving}>
+                <Text className="text-white">Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity className="bg-green-600 px-4 py-2 rounded flex-row items-center" onPress={saveName} disabled={saving}>
+                {saving && <ActivityIndicator size="small" color="#fff" className="mr-2" />}
+                <Text className="text-white font-semibold">Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
       </View>
 
       <View className="bg-gray-800 rounded-lg p-4 mb-6">

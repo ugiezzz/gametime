@@ -1,16 +1,18 @@
 import { ref, set, get, push, update, onValue, remove } from 'firebase/database';
 import { database } from '@/config/firebase';
 import { auth } from '@/config/firebase';
+import { updateProfile } from 'firebase/auth';
 import { normalizePhoneNumber } from '@/services/phoneUtil';
 
 export interface Group {
   id: string;
   name: string;
-  members: Array<{
+  // Deprecated: display-only members list. Do not rely on this; use membersByUid + users/{uid}
+  members?: Array<{
     id: string;
     name: string;
     phoneNumber: string;
-    userId?: string; // Firebase user ID if they have an account
+    userId?: string;
   }>;
   membersByUid?: Record<string, true>;
   createdBy: string; // User ID of creator
@@ -67,16 +69,6 @@ export class FirebaseGroupService {
         return userId ? { ...rest, userId, phoneNumber: e164 } : { ...rest, phoneNumber: e164 };
       });
 
-      // Ensure creator appears in the display members list as well
-      const creatorUid = currentUser.uid;
-      const creatorPhoneE164 = creatorUid.startsWith('phone:') ? creatorUid.slice('phone:'.length) : '';
-      const hasCreatorInDisplay = creatorPhoneE164
-        ? normalizedMembers.some((m) => m.phoneNumber === creatorPhoneE164)
-        : false;
-      if (creatorPhoneE164 && !hasCreatorInDisplay) {
-        normalizedMembers.unshift({ id: creatorUid, name: 'Owner', phoneNumber: creatorPhoneE164 });
-      }
-
       // Resolve known users from phoneToUid map
       const lookupResults = await Promise.all(
         normalizedMembers.map(async (m) => {
@@ -94,7 +86,6 @@ export class FirebaseGroupService {
       const newGroup: Group = {
         id: groupId,
         name,
-        members: normalizedMembers,
         createdBy: currentUser.uid,
         createdAt: new Date().toISOString() as unknown as Date,
       };
@@ -415,6 +406,26 @@ export class FirebaseGroupService {
     } catch (error) {
       console.error('Failed to create user profile:', error);
       throw error;
+    }
+  }
+
+  // Update current user's display name
+  static async updateCurrentUserDisplayName(newDisplayName: string): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('User not authenticated');
+    const trimmed = (newDisplayName || '').trim();
+    if (!trimmed) throw new Error('Name cannot be empty');
+
+    const userRef = ref(database, `${this.USERS_REF}/${currentUser.uid}`);
+    await update(userRef, {
+      displayName: trimmed,
+      displayNameUpdatedAt: new Date().toISOString(),
+    });
+
+    try {
+      await updateProfile(currentUser, { displayName: trimmed });
+    } catch {
+      // auth profile update best-effort; DB is source of truth for app
     }
   }
 } 
