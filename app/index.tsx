@@ -4,12 +4,31 @@ import { View, Text } from 'react-native';
 import { router } from 'expo-router';
 import { CustomAuthService } from '@/services/customAuthService';
 import { NotificationService } from '@/services/notificationService';
+import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { database } from '@/config/firebase';
+import { ref, get } from 'firebase/database';
 
 export default function Index() {
   useEffect(() => {
     // Navigate after Firebase rehydrates auth (persistent session)
-    const unsubscribe = CustomAuthService.onAuthStateChanged((user) => {
-      router.replace(user ? '/(tabs)' : '/auth/phone');
+    const unsubscribe = CustomAuthService.onAuthStateChanged(async (user) => {
+      if (!user) {
+        router.replace('/auth/phone');
+        return;
+      }
+
+      // Non-blocking: ensure phone->uid mapping and claim any pending phone-based invites
+      FirebaseGroupService.ensurePhoneToUidMappingForCurrentUser().catch(() => {});
+      FirebaseGroupService.claimPendingInvitesForCurrentUser().catch(() => {});
+
+      // Route to name onboarding if displayName is missing
+      try {
+        const snap = await get(ref(database, `users/${user.uid}`));
+        const hasName = snap.exists() && typeof snap.val()?.displayName === 'string' && String(snap.val()?.displayName).trim().length > 0;
+        router.replace(hasName ? '/(tabs)' : '/onboarding/name');
+      } catch {
+        router.replace('/(tabs)');
+      }
     });
 
     // Best-effort push token registration early

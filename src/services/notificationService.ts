@@ -1,7 +1,7 @@
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
 import { auth, database } from '@/config/firebase';
-import { ref, get, update } from 'firebase/database';
+import { ref, update } from 'firebase/database';
 
 export class NotificationService {
   static async requestPermissions() {
@@ -54,77 +54,6 @@ export class NotificationService {
     } catch (error) {
       console.error('Failed to register push token:', error);
       return null;
-    }
-  }
-
-  private static async getTokensForUsers(userIds: string[]): Promise<string[]> {
-    const tokens: string[] = [];
-    for (const userId of userIds) {
-      try {
-        const snapshot = await get(ref(database, `users/${userId}/expoPushToken`));
-        if (snapshot.exists()) {
-          const token = snapshot.val();
-          if (typeof token === 'string' && token.startsWith('ExponentPushToken')) {
-            tokens.push(token);
-          }
-        }
-      } catch (e) {
-        // continue
-      }
-    }
-    return tokens;
-  }
-
-  static async sendPingNotification(groupName: string, userIds: string[]) {
-    try {
-      // Gather tokens for recipients
-      const tokens = await this.getTokensForUsers(userIds);
-
-      if (tokens.length === 0) {
-        // Fallback to local notification for the sender only
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: `${groupName} Ping`,
-            body: `You've received a ping`,
-            data: { groupName, type: 'ping' },
-          },
-          trigger: null,
-        });
-        return;
-      }
-
-      const messages = tokens.map((token) => ({
-        to: token,
-        title: `${groupName} Ping`,
-        body: `You've received a ping`,
-        sound: 'default',
-        data: { groupName, type: 'ping' },
-        priority: 'high',
-      }));
-
-      await fetch('https://exp.host/--/api/v2/push/send', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'application/json',
-        },
-        body: JSON.stringify(messages),
-      });
-    } catch (error) {
-      console.error('Failed to send push notifications:', error);
-    }
-  }
-
-  // Resolve recipients from membersByUid map
-  static async sendPingToGroup(groupId: string, groupName: string): Promise<void> {
-    try {
-      const membersRef = ref(database, `groups/${groupId}/membersByUid`);
-      const snap = await get(membersRef);
-      const uids = snap.exists() ? Object.keys(snap.val() || {}) : [];
-      if (uids.length === 0) return;
-      await this.sendPingNotification(groupName, uids);
-    } catch (e) {
-      console.error('Failed to send group ping:', e);
     }
   }
 } 

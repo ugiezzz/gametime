@@ -27,13 +27,25 @@
       }
     },
 
+    "phoneInvites": {
+      "$e164": {
+        ".read": "auth != null && (auth.token.phone_number === $e164 || root.child('users/' + auth.uid + '/phoneNumber').val() === $e164)",
+        ".write": "auth != null",
+        "$groupId": {
+          ".read": "auth != null && (auth.token.phone_number === $e164 || root.child('users/' + auth.uid + '/phoneNumber').val() === $e164)",
+          ".write": "auth != null && (root.child('groups/' + $groupId + '/createdBy').val() === auth.uid || root.child('groups/' + $groupId + '/admins/' + auth.uid).exists() || root.child('users/' + auth.uid + '/phoneNumber').val() === $e164)",
+          ".validate": "newData.val() === true || newData.val() == null"
+        }
+      }
+    },
+
     "userGroups": {
       "$uid": {
         ".read": "auth != null && auth.uid === $uid",
         ".write": "auth != null && auth.uid === $uid",
         "$groupId": {
           ".read": "auth != null && auth.uid === $uid",
-          ".write": "auth != null && auth.uid === $uid"
+        ".write": "auth != null && (auth.uid === $uid || (!newData.exists() && (root.child('groups/' + $groupId).exists() ? root.child('groups/' + $groupId + '/createdBy').val() === auth.uid : true)))"
         }
       }
     },
@@ -41,7 +53,7 @@
     "groups": {
       "$groupId": {
         ".read": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-        ".write": "auth != null && (data.exists() ? (root.child('groups/' + $groupId + '/createdBy').val() === auth.uid || root.child('groups/' + $groupId + '/admins/' + auth.uid).exists()) : newData.child('createdBy').val() === auth.uid)",
+        ".write": "auth != null && (data.exists() ? (data.child('createdBy').val() === auth.uid || data.child('admins/' + auth.uid).exists()) : newData.child('createdBy').val() === auth.uid)",
 
         "id": { ".validate": "newData.isString()" },
         "name": { ".validate": "newData.isString()" },
@@ -66,13 +78,6 @@
           }
         },
 
-        "inviteesByPhone": {
-          "$e164": {
-            ".read": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-            ".write": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-            ".validate": "newData.val() === true"
-          }
-        },
 
         "pings": {
           ".indexOn": ["createdAtMs", "scheduledAtMs"],

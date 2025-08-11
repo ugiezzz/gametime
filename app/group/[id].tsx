@@ -6,7 +6,8 @@ import { Ionicons } from '@expo/vector-icons';
 // import { NotificationService } from '@/services/notificationService';
 import { FirebaseGroupService, Group } from '@/services/firebaseGroupService';
 import type { Ping } from '@/services/firebaseGroupService';
-import { auth, database } from '@/config/firebase';
+import { auth } from '@/config/firebase';
+import { database } from '@/config/firebase';
 import { ref, get } from 'firebase/database';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
@@ -21,8 +22,6 @@ export default function GroupDetailScreen() {
   const [pings, setPings] = useState<Ping[]>([]);
   // responses removed until wired to backend
   const [loading, setLoading] = useState(true);
-  const [memberUids, setMemberUids] = useState<string[]>([]);
-  const [uidToName, setUidToName] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!FirebaseAuthService.isAuthenticated()) {
@@ -68,37 +67,6 @@ export default function GroupDetailScreen() {
     return unsubscribe;
   };
 
-  // Derive member UIDs from group and resolve names from users/{uid}
-  useEffect(() => {
-    const resolveNames = async () => {
-      if (!group) return;
-      const uids: string[] = group.membersByUid
-        ? Object.keys(group.membersByUid)
-        : Array.isArray((group as any).members)
-        ? ((group as any).members as Array<{ id: string }>).map((m) => m.id)
-        : [];
-      setMemberUids(uids);
-
-      const entries = await Promise.all(
-        uids.map(async (uid) => {
-          try {
-            const snap = await get(ref(database, `users/${uid}`));
-            const name = snap.exists() && snap.val()?.displayName ? String(snap.val().displayName) : 'Member';
-            return [uid, name] as [string, string];
-          } catch {
-            return [uid, 'Member'] as [string, string];
-          }
-        })
-      );
-      const map: Record<string, string> = Object.fromEntries(entries);
-      const viewerUid = auth.currentUser?.uid;
-      if (viewerUid && !map[viewerUid]) map[viewerUid] = 'You';
-      if (group.createdBy && !map[group.createdBy]) map[group.createdBy] = 'Creator';
-      setUidToName(map);
-    };
-    resolveNames();
-  }, [group]);
-
   const handlePing = async (scheduledAtMs?: number) => {
     if (!group) return;
 
@@ -134,13 +102,13 @@ export default function GroupDetailScreen() {
     <SafeAreaView className="flex-1 bg-gray-900">
       <Stack.Screen
         options={{
-          headerTitle: () => (group ? <HeaderTitle group={group} memberUids={memberUids} uidToName={uidToName} /> : null),
+          headerTitle: () => (group ? <HeaderTitle group={group} /> : null),
           headerLeft: () => (
             <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
               <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
             </TouchableOpacity>
           ),
-          headerRight: () => (group ? <MenuButton groupId={group.id} group={group} memberUids={memberUids} uidToName={uidToName} /> : null),
+          headerRight: () => (group ? <MenuButton groupId={group.id} group={group} /> : null),
           headerStyle: { backgroundColor: '#111827' },
           headerTintColor: '#E5E7EB',
         }}
@@ -159,8 +127,8 @@ export default function GroupDetailScreen() {
           {pings.length > 0 && (
             <>
               <Text className="text-white text-lg font-semibold mb-2">Active Pings</Text>
-                  {pings.map((ping) => (
-                <PingCard key={ping.id} ping={ping} group={group} groupId={group.id} memberUids={memberUids} uidToName={uidToName} />
+              {pings.map((ping) => (
+                <PingCard key={ping.id} ping={ping} group={group} groupId={group.id} />
               ))}
             </>
           )}
@@ -190,7 +158,7 @@ function formatAbsoluteTime(dateMs: number): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function PingCard({ ping, group, groupId, memberUids, uidToName }: { ping: any; group: Group; groupId: string; memberUids: string[]; uidToName: Record<string, string> }) {
+function PingCard({ ping, group, groupId }: { ping: any; group: Group; groupId: string }) {
   const createdAt = ping.createdAtMs as number;
   // Use scheduled time if present; else fall back to createdAt
   const baseTimeMs: number = typeof ping.scheduledAtMs === 'number' ? (ping.scheduledAtMs as number) : createdAt;
@@ -206,16 +174,19 @@ function PingCard({ ping, group, groupId, memberUids, uidToName }: { ping: any; 
   const nextRound: string[] = [];
   const declined: string[] = [];
   const pending: string[] = [];
-  const nameMap = new Map<string, string>();
-  for (const uid of memberUids) nameMap.set(uid, uidToName[uid] || 'Member');
+  const uidToName = new Map<string, string>();
+  for (const m of group.members ?? []) uidToName.set(m.id, m.name);
   const viewerUid = auth.currentUser?.uid;
-  if (viewerUid && !nameMap.has(viewerUid)) nameMap.set(viewerUid, 'You');
-  if (group.createdBy && !nameMap.has(group.createdBy)) nameMap.set(group.createdBy, 'Creator');
+  if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
+  if (group.createdBy && !uidToName.has(group.createdBy)) uidToName.set(group.createdBy, 'Creator');
 
-  const allUids = new Set<string>([...Object.keys(responses), ...memberUids]);
+  const memberUidsFromGroup = Array.isArray(group.members) && group.members.length > 0
+    ? group.members.map((m) => m.id)
+    : Object.keys(group.membersByUid || {});
+  const allUids = new Set<string>([...Object.keys(responses), ...memberUidsFromGroup]);
   const selectedTargets: number[] = [];
   for (const uid of allUids) {
-    const name = nameMap.get(uid) || 'Member';
+    const name = uidToName.get(uid) || 'Member';
     const r = responses[uid];
     if (!r) { pending.push(name); continue; }
     if (r.status === 'declined') { declined.push(name); continue; }
@@ -339,14 +310,64 @@ function TextButton({ label, onPress }: { label: string; onPress: () => void }) 
   );
 }
 
-function HeaderTitle({ group, memberUids, uidToName }: { group: Group; memberUids: string[]; uidToName: Record<string, string> }) {
+function HeaderTitle({ group }: { group: Group }) {
+  const [memberNames, setMemberNames] = React.useState<string[]>([]);
+
+  React.useEffect(() => {
+    let cancelled = false;
+    const loadNames = async () => {
+      // Prefer deprecated display list if present (older groups)
+      const displayList = Array.isArray(group.members)
+        ? group.members.map((m) => m.name).filter(Boolean)
+        : [];
+      if (displayList.length > 0) {
+        if (!cancelled) setMemberNames(displayList);
+        return;
+      }
+
+      const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
+      if (uids.length === 0) {
+        if (!cancelled) setMemberNames([]);
+        return;
+      }
+
+      const currentUid = auth.currentUser?.uid;
+      const resolved: string[] = [];
+      for (const uid of uids) {
+        if (uid === currentUid) {
+          resolved.push('You');
+          continue;
+        }
+        try {
+          const snap = await get(ref(database, `users/${uid}`));
+          if (snap.exists()) {
+            const val = snap.val() as { displayName?: string };
+            if (val?.displayName && typeof val.displayName === 'string') {
+              resolved.push(val.displayName);
+            }
+          }
+        } catch {
+          // ignore best-effort lookup failures
+        }
+      }
+      if (!cancelled) setMemberNames(resolved);
+    };
+
+    loadNames();
+    return () => {
+      cancelled = true;
+    };
+  }, [group.members, group.membersByUid]);
+
+  const fallbackCount = (group.members?.length ?? (group.membersByUid ? Object.keys(group.membersByUid).length : 0)) as number;
+
   return (
     <View>
       <Text className="text-white text-base font-semibold" numberOfLines={1}>
         {group.name}
       </Text>
       <Text className="text-gray-400 text-xs" numberOfLines={1} ellipsizeMode="tail">
-        {memberUids.map((uid) => uidToName[uid] || 'Member').join(', ')}
+        {memberNames.length > 0 ? memberNames.join(', ') : `${fallbackCount} member${fallbackCount === 1 ? '' : 's'}`}
       </Text>
     </View>
   );
@@ -413,7 +434,7 @@ function SchedulePing({ onSend }: { onSend: (scheduledAtMs?: number) => Promise<
   );
 }
 
-function MenuButton({ groupId, group, memberUids, uidToName }: { groupId: string; group: Group; memberUids: string[]; uidToName: Record<string, string> }) {
+function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
   const [open, setOpen] = React.useState(false);
   const isCreator = (uid?: string) => uid && uid === group.createdBy;
   const currentUserId = auth.currentUser?.uid;
@@ -441,6 +462,25 @@ function MenuButton({ groupId, group, memberUids, uidToName }: { groupId: string
     router.push({ pathname: `/group/${groupId}/add-members`, params: { groupName: group.name } });
   };
 
+  const handleDeleteGroup = async () => {
+    Alert.alert('Delete group', 'This will permanently remove the group for all members. Continue?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await FirebaseGroupService.deleteGroup(groupId);
+            setOpen(false);
+            router.back();
+          } catch (e: any) {
+            Alert.alert('Error', e?.message || 'Failed to delete group');
+          }
+        },
+      },
+    ]);
+  };
+
   return (
     <View>
       <TouchableOpacity onPress={() => setOpen((v) => !v)}>
@@ -458,11 +498,16 @@ function MenuButton({ groupId, group, memberUids, uidToName }: { groupId: string
                   {canManage && (
                     <>
                       <View className="h-[1px] bg-gray-700 my-1" />
-                      {memberUids.map((uid) => (
-                        <TouchableOpacity key={uid} className="py-2" onPress={() => handleRemoveMember(uid)}>
-                          <Text className="text-white text-sm">Remove {uidToName[uid] || 'Member'}</Text>
-                        </TouchableOpacity>
-                      ))}
+                      <TouchableOpacity className="py-2" onPress={handleDeleteGroup}>
+                        <Text className="text-red-400 text-sm">Delete group</Text>
+                      </TouchableOpacity>
+                      <View className="h-[1px] bg-gray-700 my-1" />
+                      {Array.isArray(group.members) && group.members.length > 0 &&
+                        group.members.map((m) => (
+                          <TouchableOpacity key={m.id} className="py-2" onPress={() => handleRemoveMember(m.id)}>
+                            <Text className="text-white text-sm">Remove {m.name}</Text>
+                          </TouchableOpacity>
+                        ))}
                     </>
                   )}
                   <View className="h-[1px] bg-gray-700 my-1" />

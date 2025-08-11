@@ -7,7 +7,7 @@ import { normalizePhoneNumber } from '@/services/phoneUtil';
 export interface Group {
   id: string;
   name: string;
-  // Deprecated: display-only members list. Do not rely on this; use membersByUid + users/{uid}
+  // Deprecated: display-only members list (kept optional for older groups). Prefer membersByUid.
   members?: Array<{
     id: string;
     name: string;
@@ -48,6 +48,7 @@ export class FirebaseGroupService {
   private static GROUPS_REF = 'groups';
   private static USERS_REF = 'users';
   private static PHONE_TO_UID_REF = 'phoneToUid';
+  private static PHONE_INVITES_REF = 'phoneInvites';
 
   // Create a new group
   static async createGroup(name: string, members: Array<{ id: string; name: string; phoneNumber: string; userId?: string }>): Promise<Group> {
@@ -74,12 +75,24 @@ export class FirebaseGroupService {
         normalizedMembers.map(async (m) => {
           const phone = m.phoneNumber;
           if (!phone || !phone.startsWith('+')) return { phone, uid: null };
+          // Try direct phoneToUid mapping first
           try {
             const snap = await get(ref(database, `${this.PHONE_TO_UID_REF}/${phone}`));
-            return { phone, uid: snap.exists() ? (snap.val() as string) : null };
-          } catch (e) {
-            return { phone, uid: null };
-          }
+            if (snap.exists()) return { phone, uid: snap.val() as string };
+          } catch {}
+          // If not found, try reverse lookup by user profiles (best-effort)
+          try {
+            const phoneToUidSnap = await get(ref(database, `users`));
+            if (phoneToUidSnap.exists()) {
+              const usersVal = phoneToUidSnap.val() as Record<string, { phoneNumber?: string }>;
+              for (const [uid, u] of Object.entries(usersVal)) {
+                if (u && typeof u.phoneNumber === 'string' && u.phoneNumber === phone) {
+                  return { phone, uid };
+                }
+              }
+            }
+          } catch {}
+          return { phone, uid: null };
         })
       );
 
@@ -90,26 +103,42 @@ export class FirebaseGroupService {
         createdAt: new Date().toISOString() as unknown as Date,
       };
 
-      // Compose hybrid membership maps for secure access control
+      // Compose membership map; unresolved phones will be stored in phoneInvites index (not under group)
       const membersByUid: Record<string, true> = { [currentUser.uid]: true };
-      const inviteesByPhone: Record<string, true> = {};
+      const unresolvedPhones: string[] = [];
       for (const r of lookupResults) {
         if (!r.phone) continue;
         if (r.uid) {
           membersByUid[r.uid] = true;
         } else if (r.phone.startsWith('+')) {
-          inviteesByPhone[r.phone] = true;
+          // Derive UID when backend uses deterministic uid scheme: `phone:${e164}`
+          const derivedUid = `phone:${r.phone}`;
+          membersByUid[derivedUid] = true;
+          unresolvedPhones.push(r.phone);
         }
       }
 
       await set(newGroupRef, {
         ...newGroup,
         membersByUid,
-        inviteesByPhone,
       });
 
       // Ensure creator sees the group
       await this.addGroupToUser(currentUser.uid, groupId);
+      // Best-effort: index the group for all resolved/derived member UIDs
+      try {
+        const resolvedUids = Object.keys(membersByUid).filter((uid) => uid !== currentUser.uid);
+        await Promise.all(
+          resolvedUids.map(async (uid) => {
+            const userGroupRef = ref(database, `userGroups/${uid}/${groupId}`);
+            try {
+              await set(userGroupRef, true);
+            } catch {
+              // allowed by rules for creator when index does not exist; ignore on permission errors
+            }
+          })
+        );
+      } catch {}
       // Also set userGroups index for creator (owner-write; rules must allow)
       try {
         const userGroupRef = ref(database, `userGroups/${currentUser.uid}/${groupId}`);
@@ -118,8 +147,16 @@ export class FirebaseGroupService {
         // non-blocking if rules disallow; Cloud Function indexer will populate
       }
 
-      // Note: Do not write to other users' profiles here; restricted by security rules.
-      // A backend function should add groups for invited members.
+      // Index unresolved phone invites at user-level index for later claim on signup
+      try {
+        for (const phone of unresolvedPhones) {
+          await set(ref(database, `phoneInvites/${phone}/${groupId}`), true);
+        }
+      } catch {
+        // best-effort
+      }
+
+      // Note: Do not write to other users' profiles beyond allowed indexes; group membership remains source of truth.
 
       return newGroup;
     } catch (error) {
@@ -128,6 +165,32 @@ export class FirebaseGroupService {
     }
   }
 
+  // Delete a group (owner-only). Removes the group and userGroups index entries for all members.
+  static async deleteGroup(groupId: string): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('User not authenticated');
+
+    // Read group to verify ownership and gather member index
+    const groupRef = ref(database, `${this.GROUPS_REF}/${groupId}`);
+    const snap = await get(groupRef);
+    if (!snap.exists()) return;
+    const groupData = snap.val() as { createdBy: string; membersByUid?: Record<string, true> };
+    if (groupData.createdBy !== currentUser.uid) {
+      throw new Error('Only the group owner can delete this group');
+    }
+
+    // Build a multi-path update to delete the group and clean up userGroups indexes
+    const updates: Record<string, null> = {};
+    updates[`${this.GROUPS_REF}/${groupId}`] = null;
+
+    const members = groupData.membersByUid ? Object.keys(groupData.membersByUid) : [];
+    const uniqueUids = new Set<string>([...members, groupData.createdBy]);
+    for (const uid of uniqueUids) {
+      updates[`userGroups/${uid}/${groupId}`] = null;
+    }
+
+    await update(ref(database), updates);
+  }
   // Get all groups for the current user
   static async getUserGroups(): Promise<Group[]> {
     try {
@@ -277,12 +340,81 @@ export class FirebaseGroupService {
     return unsubscribe;
   }
 
-  // Invite member by phone (adds to inviteesByPhone map)
-  static async inviteMemberByPhone(groupId: string, phoneNumber: string): Promise<void> {
+  // Invite or add member by phone.
+  // If the phone number is already associated with a registered user (via phoneToUid),
+  // add them directly to membersByUid and index userGroups. Otherwise, index under phoneInvites only.
+  static async inviteMemberByPhone(
+    groupId: string,
+    phoneNumber: string
+  ): Promise<{ action: 'addedAsMember' | 'invitedByPhone'; uid?: string; e164: string }> {
     const normalized = normalizePhoneNumber(phoneNumber);
-    const e164 = normalized.e164 || (phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/\D/g, '')}`);
-    const inviteRef = ref(database, `${this.GROUPS_REF}/${groupId}/inviteesByPhone/${e164}`);
-    await set(inviteRef, true);
+    const e164 =
+      normalized.e164 || (phoneNumber.startsWith('+') ? phoneNumber : `+${phoneNumber.replace(/\D/g, '')}`);
+
+    // Use deterministic uid scheme: uid = `phone:${e164}`
+    const derivedUid = `phone:${e164}`;
+
+    // Add to group membership map unconditionally; rules allow creator/admin to add
+    await set(ref(database, `${this.GROUPS_REF}/${groupId}/membersByUid/${derivedUid}`), true);
+
+    // Best-effort index the group for that user
+    try {
+      await set(ref(database, `userGroups/${derivedUid}/${groupId}`), true);
+    } catch {}
+
+    // Also record phone-level invite so non-existing users can claim later (harmless for existing)
+    try {
+      await set(ref(database, `${this.PHONE_INVITES_REF}/${e164}/${groupId}`), true);
+    } catch {}
+
+    return { action: 'addedAsMember', uid: derivedUid, e164 };
+  }
+
+  // When a user completes signup, call this to claim any phone-based invites
+  static async claimPendingInvitesForCurrentUser(): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('User not authenticated');
+    // We need the user's phone number from profile
+    const userSnap = await get(ref(database, `${this.USERS_REF}/${currentUser.uid}`));
+    if (!userSnap.exists()) return;
+    const val = userSnap.val() as { phoneNumber?: string };
+    const phone = val.phoneNumber;
+    if (!phone) return;
+
+    const inviteSnap = await get(ref(database, `${this.PHONE_INVITES_REF}/${phone}`));
+    if (!inviteSnap.exists()) return;
+    const groupIds: string[] = Object.keys(inviteSnap.val() || {});
+
+    const updates: Record<string, any> = {};
+    for (const gid of groupIds) {
+      updates[`${this.GROUPS_REF}/${gid}/membersByUid/${currentUser.uid}`] = true;
+      updates[`userGroups/${currentUser.uid}/${gid}`] = true;
+      // Do not remove phone-based membership; in this project, uid equals `phone:{e164}`
+      updates[`${this.PHONE_INVITES_REF}/${phone}/${gid}`] = null;
+    }
+    if (Object.keys(updates).length > 0) {
+      await update(ref(database), updates);
+    }
+  }
+
+  // Ensure phoneToUid mapping exists for the current user (self-service, permitted by rules)
+  static async ensurePhoneToUidMappingForCurrentUser(): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return;
+    try {
+      const userSnap = await get(ref(database, `${this.USERS_REF}/${currentUser.uid}`));
+      if (!userSnap.exists()) return;
+      const val = userSnap.val() as { phoneNumber?: string };
+      const phone = val.phoneNumber;
+      if (!phone || !phone.startsWith('+')) return;
+      const mappingRef = ref(database, `${this.PHONE_TO_UID_REF}/${phone}`);
+      const mapSnap = await get(mappingRef);
+      if (!mapSnap.exists() || mapSnap.val() !== currentUser.uid) {
+        await set(mappingRef, currentUser.uid);
+      }
+    } catch {
+      // best-effort, no throw
+    }
   }
 
   // Remove a member by uid (admin-only by rules)
@@ -307,25 +439,7 @@ export class FirebaseGroupService {
     await this.removeMember(groupId, currentUser.uid);
   }
 
-  // Upsert a display member into the groups/{groupId}/members array for UI visibility
-  static async upsertDisplayMember(
-    groupId: string,
-    member: { id: string; name: string; phoneNumber: string }
-  ): Promise<void> {
-    const groupRef = ref(database, `${this.GROUPS_REF}/${groupId}`);
-    const snap = await get(groupRef);
-    if (!snap.exists()) return;
-    const groupData = snap.val() as { members?: Array<{ id: string; name: string; phoneNumber: string }>; };
-    const current: Array<{ id: string; name: string; phoneNumber: string }> = Array.isArray(groupData.members)
-      ? groupData.members
-      : [];
-
-    const exists = current.some((m) => (m.phoneNumber && member.phoneNumber && m.phoneNumber === member.phoneNumber) || m.id === member.id);
-    if (exists) return;
-
-    const updated = [...current, member];
-    await update(groupRef, { members: updated });
-  }
+  // Removed: upsertDisplayMember (deprecated display list not maintained anymore)
 
   // Add group to user's groups list
   private static async addGroupToUser(userId: string, groupId: string): Promise<void> {

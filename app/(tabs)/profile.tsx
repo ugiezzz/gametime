@@ -85,6 +85,22 @@ export default function ProfileScreen() {
     }
   };
 
+  // Owner-only test: create and delete a temp group with current auth
+  const runCreateDeleteGroupTest = async () => {
+    try {
+      setDebugOutput('Starting create/delete group test...');
+      const group = await FirebaseGroupService.createGroup('Temp Delete Test', []);
+      setDebugOutput(`Created group ${group.id}, deleting...`);
+      await FirebaseGroupService.deleteGroup(group.id);
+      setDebugOutput(`Success: Group ${group.id} deleted and indexes cleaned.`);
+      Alert.alert('Success', 'Create/Delete group test passed.');
+    } catch (e: any) {
+      const msg = e?.message || String(e);
+      setDebugOutput(`Create/Delete test failed: ${msg}`);
+      Alert.alert('Error', msg);
+    }
+  };
+
   const runMembershipDiagnostics = async () => {
     try {
       setDebugOutput('Running diagnostics...');
@@ -174,6 +190,9 @@ export default function ProfileScreen() {
           <Text className="text-white text-lg font-bold mb-3">Test scripts</Text>
           <TouchableOpacity className="bg-blue-600 p-3 rounded mb-3" onPress={runMembershipDiagnostics}>
             <Text className="text-white text-center font-semibold">Membership index diagnostics</Text>
+          </TouchableOpacity>
+          <TouchableOpacity className="bg-gray-700 p-3 rounded mb-3" onPress={runCreateDeleteGroupTest}>
+            <Text className="text-white text-center font-semibold">Create & delete temp group</Text>
           </TouchableOpacity>
           {!!debugOutput && (
             <View className="bg-gray-900 p-3 rounded">

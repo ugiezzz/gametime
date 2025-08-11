@@ -3,16 +3,61 @@ import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { FirebaseGroupService, Group } from '@/services/firebaseGroupService';
+import { database } from '@/config/firebase';
+import { ref, get } from 'firebase/database';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
 import { useFocusEffect } from '@react-navigation/native';
 
 export default function GroupsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
+  const [groupIdToNames, setGroupIdToNames] = useState<Record<string, string[]>>({});
 
   useEffect(() => {
     loadGroups();
   }, []);
+
+  // Resolve member display names when groups list changes
+  useEffect(() => {
+    const resolveNames = async () => {
+      const mapping: Record<string, string[]> = {};
+      await Promise.all(
+        groups.map(async (g) => {
+          // Prefer legacy display list if present
+          const legacyNames = Array.isArray((g as any).members)
+            ? ((g as any).members as any[]).map((m: any) => m?.name).filter(Boolean)
+            : [];
+          if (legacyNames.length > 0) {
+            mapping[g.id] = legacyNames as string[];
+            return;
+          }
+          const uids = g.membersByUid ? Object.keys(g.membersByUid) : [];
+          if (uids.length === 0) {
+            mapping[g.id] = [];
+            return;
+          }
+          const names: string[] = [];
+          await Promise.all(
+            uids.map(async (uid) => {
+              try {
+                const snap = await get(ref(database, `users/${uid}`));
+                if (snap.exists()) {
+                  const val = snap.val() as { displayName?: string };
+                  if (val?.displayName) names.push(val.displayName);
+                }
+              } catch {
+                // ignore best-effort
+              }
+            })
+          );
+          mapping[g.id] = names;
+        })
+      );
+      setGroupIdToNames(mapping);
+    };
+    if (groups.length > 0) resolveNames();
+    else setGroupIdToNames({});
+  }, [groups]);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,6 +114,7 @@ export default function GroupsScreen() {
       : Array.isArray((item as any).members)
       ? ((item as any).members as any[]).length
       : 0;
+    const names = groupIdToNames[item.id] || [];
     return (
       <TouchableOpacity
         className="bg-gray-800 p-4 rounded-lg mb-3 mx-4"
@@ -77,7 +123,9 @@ export default function GroupsScreen() {
         <View className="flex-row justify-between items-center">
           <View className="flex-1">
             <Text className="text-white text-lg font-bold">{item.name}</Text>
-            <Text className="text-gray-400 text-sm">{memberCount} members</Text>
+            <Text className="text-gray-400 text-sm" numberOfLines={1} ellipsizeMode="tail">
+              {names.length > 0 ? names.join(', ') : `${memberCount} member${memberCount === 1 ? '' : 's'}`}
+            </Text>
           </View>
           <View className="items-end">
             <Text className="text-gray-400 text-sm">{formatLastPing(item.lastPing)}</Text>

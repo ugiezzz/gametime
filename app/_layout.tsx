@@ -1,9 +1,11 @@
-import { Stack } from 'expo-router';
+import { Stack, router } from 'expo-router';
 import { NativeWindStyleSheet } from 'nativewind';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import * as Notifications from 'expo-notifications';
 import { NotificationService } from '@/services/notificationService';
+import { TouchableOpacity } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 NativeWindStyleSheet.setOutput({
   default: 'native',
@@ -52,6 +54,11 @@ export default function Layout() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
+          headerLeft: () => (
+            <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          ),
           contentStyle: {
             backgroundColor: '#333333',
           },

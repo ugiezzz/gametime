@@ -9,7 +9,7 @@ This PRD outlines the detailed requirements for building "GameTime," a cross-pla
 - **Out of Scope**: Media sharing, text messaging, custom profiles, location sharing, monetization, additional features like ping history.
 
 ### 1.3 Assumptions
-- Backend: Use Firebase for authentication, real-time database, and cloud messaging (compatible with Expo).
+- Backend: Firebase Auth, Realtime Database, and Cloud Functions; push delivery via Expo Push service (server-driven), not client-initiated FCM.
 - App is free.
 - Target: iOS 14+ and Android 10+.
 - Base Boilerplate: Use https://github.com/ixartz/React-Native-Boilerplate as the starting point, leveraging Expo, TypeScript, NativeWind for styling, Expo Router for navigation, and pre-configured testing/linting.
@@ -33,7 +33,7 @@ Gamers for casual or competitive coordination across various games.
    - Auto-login on relaunch.
 
 2. **Permissions**
-   - Request access to contacts and notifications on first launch (use Expo's notification APIs for simplicity).
+   - Request access to contacts and notifications on first launch (Expo Notifications for permissions and token registration; delivery is handled by backend Cloud Functions).
 
 3. **Contacts Integration**
    - Fetch and display phone contacts (use react-native-contacts).
@@ -54,12 +54,12 @@ Gamers for casual or competitive coordination across various games.
    - Real-time display of member responses below the button, including the game name for the current ping.
 
 7. **Ping Functionality**
-   - After entering game name, send push notification to group members via Firebase Cloud Messaging (or Expo Notifications for cross-platform ease).
-   - Notification: "[Group Name] Ping: Ready to play [Game Name]?" with quick reply options.
+   - After entering game name, app writes a new ping to Realtime Database; a Cloud Function trigger sends push notifications to group members via Expo Push API.
+   - Notification: "[Group Name] Ping" with body including initiator and time; opens group on tap.
 
 8. **Response Functionality**
    - Predefined options: "Yes", "Coming now", "5 min", "10 min", "20 min", "Later", "Not today".
-   - Support quick replies from notification or in-app buttons.
+   - Respond via in-app buttons; notification tap opens the app to the group.
    - Store and update responses in real-time using Firebase.
    - Display: Member name + response + timestamp (with game name shown at the top of responses).
    - Auto-clear responses after 24 hours or on new ping.
@@ -87,8 +87,8 @@ Gamers for casual or competitive coordination across various games.
 2. Notifications sent; responses update live, showing game name.
 
 ### 4.4 Receive and Respond
-1. Notification received (includes game name) → Quick reply or open app.
-2. Select response → Update visible to all.
+1. Notification received → Tap notification to open group.
+2. Select response in-app → Update visible to all.
 
 ## 5. Design Guidelines
 - **Style**: Simple, clean, general gaming theme – Neutral colors (e.g., dark grays, whites), minimal icons, nothing fancy.
@@ -104,25 +104,33 @@ Gamers for casual or competitive coordination across various games.
 ## 6. Technical Requirements
 ### 6.1 Tech Stack
 - Framework: React Native with Expo (from boilerplate).
-- Backend: Firebase (Auth, Realtime Database, Cloud Messaging; integrate with Expo).
+- Backend: Firebase (Auth, Realtime Database, Cloud Functions) and Expo Push service for notifications.
 - Libraries (Leverage Boilerplate):
   - Navigation: Expo Router (file-based routing).
   - Styling: NativeWind (Tailwind CSS).
   - Testing: Jest, Detox.
-  - Additional: react-native-permissions, @react-native-firebase (or Expo Notifications), react-native-contacts, AsyncStorage.
+  - Additional: react-native-permissions, expo-notifications, react-native-contacts, AsyncStorage.
 - State: Context API or Redux (add if needed; boilerplate doesn't pre-configure).
 - Platform Adaptations: Use Platform.OS for iOS/Android differences; Expo handles much cross-platform.
 
 ### 6.2 Data Model
-- User: { id: string, phone: string }
+- User: { id: string, phone: string, expoPushToken?: string, displayName?: string }
 - Group: { id: string, name: string, members: array of userIds, lastPing: timestamp }
-- Ping: { id: string, groupId: string, initiatorId: string, gameName: string, timestamp: number }
+- Ping: { id: string, groupId: string, initiatorId: string, gameName?: string, createdAtMs: number, scheduledAtMs?: number, expiresAtMs: number }
 - PingResponse: { pingId: string, userId: string, response: string, timestamp: number }
 
 ### 6.3 Security and Performance
 - Use Firebase security rules for data access.
 - Enable offline persistence in Firebase.
 - Optimize real-time listeners to avoid excessive reads.
+ - Do not send notifications from the client. All push delivery is initiated by trusted backend Cloud Functions.
+
+### 6.4 Notifications Architecture
+- Client registers for notifications using `expo-notifications`, stores token at `users/{uid}/expoPushToken`.
+- Creating a ping writes to `/groups/{groupId}/pings/{pingId}` with timestamps and creator.
+- Cloud Function `notifyPingCreate` listens for ping creation, resolves recipient UIDs from `membersByUid`, fetches stored Expo tokens, and calls Expo Push API.
+- Function logs debug info under `debug/pings/{groupId}/{pingId}` and skips the creator.
+- Future: handle token expiration/batching responses and prune invalid tokens.
 
 ## 7. Order of Execution for AI Agent Development
 Follow this sequential order to build the app iteratively. Start from the boilerplate (clone and setup). Each step includes clear tasks; generate code, test, and refine before proceeding.
@@ -154,8 +162,8 @@ Follow this sequential order to build the app iteratively. Start from the boiler
    - Add game name input prompt on ping click.
 
 6. **Ping and Notifications**
-   - Implement "Ping" action: Prompt game name, send FCM/Expo notifications.
-   - Configure notification handling (foreground/background; use Expo Notifications for simplicity).
+   - Implement "Ping" action: Prompt game name; write ping to DB; Cloud Function `notifyPingCreate` dispatches Expo push.
+   - Configure client notification permissions and token registration using `expo-notifications`.
 
 7. **Response Handling**
    - Add quick response options (in-app and notification).

@@ -58,9 +58,8 @@ async function main() {
   }
   const group = groupSnap.val();
   const membersByUid = group.membersByUid ? Object.keys(group.membersByUid) : [];
-  const inviteesByPhone = group.inviteesByPhone ? Object.keys(group.inviteesByPhone) : [];
   console.log('\nGroup:', gid);
-  print({ name: group.name, createdBy: group.createdBy, membersByUid, inviteesByPhone });
+  print({ name: group.name, createdBy: group.createdBy, membersByUid });
 
   // For each member UID, check userGroups index and profile/token presence
   const report = [];
@@ -81,7 +80,7 @@ async function main() {
   const missingToken = report.filter(r => !r.pushTokenPresent).map(r => r.uid);
   if (missingIndex.length > 0) console.log('\n⚠️ Missing userGroups index for:', missingIndex);
   if (missingToken.length > 0) console.log('\n⚠️ Missing expoPushToken for:', missingToken);
-  if (inviteesByPhone.length > 0) console.log('\nℹ️ Pending invitees by phone (will auto-join on sign-in):', inviteesByPhone);
+  // For pending phone invites, query phoneInvites separately if desired
 }
 
 main().catch((e) => {

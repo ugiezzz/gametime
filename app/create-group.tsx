@@ -101,11 +101,17 @@ export default function CreateGroupScreen() {
         return norm.e164 || '';
       };
 
-      const members = selectedContacts.map(contact => ({
-        id: contact.id,
-        name: contact.name,
-        phoneNumber: normalizePhone(contact.phoneNumbers?.[0]),
-      }));
+      // Prefer the first valid E.164 across all numbers for each contact
+      const members = selectedContacts.map(contact => {
+        const allNumbers = contact.phoneNumbers || [];
+        const candidates = allNumbers.map(n => normalizePhone(n)).filter((e): e is string => Boolean(e));
+        const best = candidates[0] || '';
+        return {
+          id: contact.id,
+          name: contact.name,
+          phoneNumber: best,
+        };
+      });
 
       await FirebaseGroupService.createGroup(groupName.trim(), members);
       Alert.alert('Success', 'Group created successfully!');

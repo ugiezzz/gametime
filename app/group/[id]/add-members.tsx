@@ -69,11 +69,6 @@ export default function AddMembersScreen() {
         const phone = normalize(c.phoneNumbers?.[0]);
         if (phone) {
           await FirebaseGroupService.inviteMemberByPhone(String(groupId), phone);
-          await FirebaseGroupService.upsertDisplayMember(String(groupId), {
-            id: c.id,
-            name: c.name,
-            phoneNumber: phone,
-          });
         }
       }
       router.back();
@@ -97,7 +92,7 @@ export default function AddMembersScreen() {
 
   return (
     <View className="flex-1 bg-gray-900">
-      <Stack.Screen options={{ title: groupName ? String(groupName) : 'Add members' }} />
+      <Stack.Screen options={{ title: formatTitle(groupName ? String(groupName) : 'Add members') }} />
       <View className="p-4 border-b border-gray-700">
         <TextInput
           className="bg-gray-800 text-white p-3 rounded-lg border border-gray-700"
@@ -115,6 +110,12 @@ export default function AddMembersScreen() {
       </View>
     </View>
   );
+}
+
+function formatTitle(input?: string) {
+  const s = (input || '').replace(/-/g, ' ').trim();
+  if (!s) return '';
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 
