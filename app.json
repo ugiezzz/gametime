@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "scheme": "myapp",
+    "scheme": "gametime",
     "splash": {
       "image": "./assets/splash.png",
       "resizeMode": "contain",
@@ -24,15 +24,37 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.gametime.app"
+      "package": "com.gametime.app",
+      "versionCode": 1,
+      "permissions": [
+        "READ_CONTACTS",
+        "POST_NOTIFICATIONS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-notifications",
+      [
+        "expo-contacts",
+        {
+          "contactsPermission": "GameTime uses your contacts to let you invite friends to groups."
+        }
+      ]
     ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.gametime.app",
+      "buildNumber": "1",
+      "infoPlist": {
+        "NSContactsUsageDescription": "GameTime uses your contacts to let you invite friends to groups.",
+        "NSCalendarsUsageDescription": "GameTime lets you pick times; calendar access may be used in future updates.",
+        "NSUserTrackingUsageDescription": "We do not track you across apps."
+      }
+    },
     "extra": {
       "router": {},
       "eas": {

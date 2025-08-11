@@ -1,0 +1,19 @@
+{
+  "cli": {
+    "version": ">= 3.17.1"
+  },
+  "build": {
+    "production": {
+      "distribution": "store",
+      "autoIncrement": true
+    },
+    "preview": {
+      "distribution": "internal",
+      "developmentClient": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+

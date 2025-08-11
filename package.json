@@ -9,6 +9,10 @@
     "web": "expo start --web",
     "android": "expo run:android",
     "ios": "expo run:ios",
+    "build:android": "eas build --platform android --non-interactive",
+    "build:ios": "eas build --platform ios --non-interactive",
+    "submit:android": "eas submit -p android --non-interactive",
+    "submit:ios": "eas submit -p ios --non-interactive",
     "clean": "rimraf .expo android coverage ios",
     "lint": "eslint .",
     "format": "eslint --fix . && prettier '**/*.{json,yaml}' --write --ignore-path .gitignore",
@@ -27,8 +31,7 @@
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "^2.2.0",
-    "@react-native-firebase/app": "^22.4.0",
-    "@react-native-firebase/auth": "^22.4.0",
+    
     "expo": "^53.0.0",
     "expo-av": "~15.1.7",
     "expo-constants": "~17.1.7",
@@ -37,7 +40,7 @@
     "expo-linking": "~7.1.7",
     "expo-localization": "~16.1.6",
     "expo-notifications": "~0.31.4",
-    "expo-permissions": "~14.2.1",
+    
     "expo-router": "~5.1.4",
     "expo-splash-screen": "~0.30.10",
     "expo-status-bar": "~2.2.3",

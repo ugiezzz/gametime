@@ -30,6 +30,17 @@ export default function Layout() {
     });
 
     const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
+      try {
+        const data: any = response.notification.request.content.data || {};
+        if (data.groupId) {
+          router.push(`/group/${data.groupId}` as any);
+          return;
+        }
+        if (data.route && typeof data.route === 'string') {
+          router.push(data.route as any);
+          return;
+        }
+      } catch {}
       console.log('Notification response:', response);
     });
 
