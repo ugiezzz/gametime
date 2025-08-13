@@ -5,11 +5,17 @@ import { router } from 'expo-router';
 import { CustomAuthService } from '@/services/customAuthService';
 import { NotificationService } from '@/services/notificationService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { configureRiotService } from '@/services/riotService';
+import { getRiotApiKey } from '@/config/riotConfig';
 import { database } from '@/config/firebase';
 import { ref, get } from 'firebase/database';
 
 export default function Index() {
   useEffect(() => {
+    try {
+      const key = getRiotApiKey();
+      if (key) configureRiotService({ apiKey: key });
+    } catch {}
     // Navigate after Firebase rehydrates auth (persistent session)
     const unsubscribe = CustomAuthService.onAuthStateChanged(async (user) => {
       if (!user) {

@@ -9,6 +9,7 @@ import type { Ping } from '@/services/firebaseGroupService';
 import { auth } from '@/config/firebase';
 import { database } from '@/config/firebase';
 import { ref, get } from 'firebase/database';
+import { getActiveGameStatus } from '@/services/riotService';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
 // Response type removed (to be reintroduced when wiring responses)
@@ -311,46 +312,45 @@ function TextButton({ label, onPress }: { label: string; onPress: () => void }) 
 }
 
 function HeaderTitle({ group }: { group: Group }) {
-  const [memberNames, setMemberNames] = React.useState<string[]>([]);
+  const [members, setMembers] = React.useState<Array<{ uid: string; name: string }>>([]);
+  const [statuses, setStatuses] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     let cancelled = false;
     const loadNames = async () => {
       // Prefer deprecated display list if present (older groups)
       const displayList = Array.isArray(group.members)
-        ? group.members.map((m) => m.name).filter(Boolean)
+        ? group.members.map((m) => ({ uid: m.id, name: m.name })).filter((m) => !!m.name)
         : [];
       if (displayList.length > 0) {
-        if (!cancelled) setMemberNames(displayList);
+        if (!cancelled) setMembers(displayList);
         return;
       }
 
       const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
       if (uids.length === 0) {
-        if (!cancelled) setMemberNames([]);
+        if (!cancelled) setMembers([]);
         return;
       }
 
       const currentUid = auth.currentUser?.uid;
-      const resolved: string[] = [];
+      const resolved: Array<{ uid: string; name: string }> = [];
       for (const uid of uids) {
         if (uid === currentUid) {
-          resolved.push('You');
+          resolved.push({ uid, name: 'You' });
           continue;
         }
         try {
-          const snap = await get(ref(database, `users/${uid}`));
+          const snap = await get(ref(database, `users/${uid}/displayName`));
           if (snap.exists()) {
-            const val = snap.val() as { displayName?: string };
-            if (val?.displayName && typeof val.displayName === 'string') {
-              resolved.push(val.displayName);
+            const name = String(snap.val());
+            if (name && name.trim().length > 0) {
+              resolved.push({ uid, name });
             }
           }
-        } catch {
-          // ignore best-effort lookup failures
-        }
+        } catch {}
       }
-      if (!cancelled) setMemberNames(resolved);
+      if (!cancelled) setMembers(resolved);
     };
 
     loadNames();
@@ -358,6 +358,42 @@ function HeaderTitle({ group }: { group: Group }) {
       cancelled = true;
     };
   }, [group.members, group.membersByUid]);
+
+  // Poll Riot statuses for LoL groups
+  React.useEffect(() => {
+    if (group.game !== 'League of Legends') {
+      setStatuses({});
+      return;
+    }
+    let cancelled = false;
+    let interval: any;
+    const poll = async () => {
+      const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
+      const next: Record<string, string> = {};
+      for (const uid of uids) {
+        try {
+          const puuidSnap = await get(ref(database, `users/${uid}/riotPuuid`));
+          const regionSnap = await get(ref(database, `users/${uid}/riotRegion`));
+          const puuid = puuidSnap.exists() ? String(puuidSnap.val()) : '';
+          const region = regionSnap.exists() ? String(regionSnap.val()) : '';
+          if (!puuid || !region) continue;
+          try {
+            const res = await getActiveGameStatus(puuid, region as any);
+            if (res.inGame && typeof res.elapsedMinutes === 'number') {
+              next[uid] = `In game - ${res.elapsedMinutes}m`;
+            }
+          } catch {}
+        } catch {}
+      }
+      if (!cancelled) setStatuses(next);
+    };
+    poll();
+    interval = setInterval(poll, 30000);
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [group.game, group.membersByUid]);
 
   const fallbackCount = (group.members?.length ?? (group.membersByUid ? Object.keys(group.membersByUid).length : 0)) as number;
 
@@ -367,7 +403,11 @@ function HeaderTitle({ group }: { group: Group }) {
         {group.name}
       </Text>
       <Text className="text-gray-400 text-xs" numberOfLines={1} ellipsizeMode="tail">
-        {memberNames.length > 0 ? memberNames.join(', ') : `${fallbackCount} member${fallbackCount === 1 ? '' : 's'}`}
+        {members.length > 0
+          ? members
+              .map(({ uid, name }) => (statuses[uid] ? `${name} (${statuses[uid]})` : name))
+              .join(', ')
+          : `${fallbackCount} member${fallbackCount === 1 ? '' : 's'}`}
       </Text>
     </View>
   );

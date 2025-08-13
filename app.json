@@ -60,6 +60,8 @@
       "eas": {
         "projectId": "842750e2-95c1-46ec-bada-977be4ce08ea"
       }
+      ,
+      "RIOT_API_KEY": "RGAPI-a23c8c62-d570-433f-8278-8c04f6f16d29"
     }
   }
 }

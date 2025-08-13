@@ -145,3 +145,10 @@ firebase deploy --only functions,database
 - Auth client: `gameTime/src/services/customAuthService.ts`
 - Notifications: `gameTime/src/services/notificationService.ts`
 - Database rules: `gameTime/database.rules.json`
+
+
+
+
+
+
+

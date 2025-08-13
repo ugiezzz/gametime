@@ -19,6 +19,7 @@ export interface Group {
   createdAt: Date;
   lastPing?: Date;
   currentGame?: string;
+  game?: string;
 }
 
 export interface PingResponse {
@@ -42,6 +43,13 @@ export interface User {
   displayName?: string;
   groups: string[]; // Array of group IDs
   createdAt: Date;
+  riotGameName?: string | null;
+  riotTagLine?: string | null;
+  riotRegion?: string | null;
+  riotSuperRegion?: 'americas' | 'europe' | 'asia' | 'sea' | null;
+  riotPuuid?: string | null;
+  riotSummonerId?: string | null;
+  riotLastVerifiedAt?: string | null;
 }
 
 export class FirebaseGroupService {
@@ -51,7 +59,11 @@ export class FirebaseGroupService {
   private static PHONE_INVITES_REF = 'phoneInvites';
 
   // Create a new group
-  static async createGroup(name: string, members: Array<{ id: string; name: string; phoneNumber: string; userId?: string }>): Promise<Group> {
+  static async createGroup(
+    name: string,
+    members: Array<{ id: string; name: string; phoneNumber: string; userId?: string }>,
+    game: string = 'League of Legends'
+  ): Promise<Group> {
     try {
       const currentUser = auth.currentUser;
       if (!currentUser) {
@@ -101,6 +113,7 @@ export class FirebaseGroupService {
         name,
         createdBy: currentUser.uid,
         createdAt: new Date().toISOString() as unknown as Date,
+        game,
       };
 
       // Compose membership map; unresolved phones will be stored in phoneInvites index (not under group)
@@ -422,13 +435,11 @@ export class FirebaseGroupService {
     // Remove from group membership map
     const memberRef = ref(database, `${this.GROUPS_REF}/${groupId}/membersByUid/${userId}`);
     await remove(memberRef);
-    // Remove group from user's groups array
-    const userRef = ref(database, `${this.USERS_REF}/${userId}`);
-    const snap = await get(userRef);
-    if (snap.exists()) {
-      const val = snap.val() as User;
-      const updated = (val.groups || []).filter((g) => g !== groupId);
-      await update(userRef, { groups: updated });
+    // Clean userGroups index for the removed member. Rules allow group creator/admin to delete index entries.
+    try {
+      await remove(ref(database, `userGroups/${userId}/${groupId}`));
+    } catch {
+      // ignore best-effort index cleanup
     }
   }
 
@@ -541,5 +552,28 @@ export class FirebaseGroupService {
     } catch {
       // auth profile update best-effort; DB is source of truth for app
     }
+  }
+
+  // Update current user's Riot identifiers (after verification)
+  static async updateCurrentUserRiotFields(fields: {
+    riotGameName: string;
+    riotTagLine: string;
+    riotRegion: string;
+    riotSuperRegion: 'americas' | 'europe' | 'asia' | 'sea';
+    riotPuuid: string;
+    riotSummonerId: string;
+  }): Promise<void> {
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('User not authenticated');
+    const userRef = ref(database, `${this.USERS_REF}/${currentUser.uid}`);
+    await update(userRef, {
+      riotGameName: fields.riotGameName,
+      riotTagLine: fields.riotTagLine,
+      riotRegion: fields.riotRegion,
+      riotSuperRegion: fields.riotSuperRegion,
+      riotPuuid: fields.riotPuuid,
+      riotSummonerId: fields.riotSummonerId,
+      riotLastVerifiedAt: new Date().toISOString(),
+    });
   }
 } 

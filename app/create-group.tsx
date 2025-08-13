@@ -16,6 +16,7 @@ interface Contact {
 
 export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState('');
+  const [game] = useState<'League of Legends'>('League of Legends');
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -113,7 +114,7 @@ export default function CreateGroupScreen() {
         };
       });
 
-      await FirebaseGroupService.createGroup(groupName.trim(), members);
+      await FirebaseGroupService.createGroup(groupName.trim(), members, game);
       Alert.alert('Success', 'Group created successfully!');
       router.back();
     } catch (error) {
@@ -159,13 +160,26 @@ export default function CreateGroupScreen() {
   return (
     <View className="flex-1 bg-gray-900">
       <View className="p-4 border-b border-gray-700">
-        <TextInput
-          className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
-          placeholder="Enter group name"
-          placeholderTextColor="#9CA3AF"
-          value={groupName}
-          onChangeText={setGroupName}
-        />
+        <View className="flex-row space-x-3">
+          <View style={{ flex: 1 }}>
+            <TextInput
+              className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
+              placeholder="Enter group name"
+              placeholderTextColor="#9CA3AF"
+              value={groupName}
+              onChangeText={setGroupName}
+            />
+          </View>
+          <View style={{ width: 160 }}>
+            <TouchableOpacity
+              className="bg-gray-800 p-4 rounded-lg border border-gray-700"
+              onPress={() => { /* single option; no dropdown needed yet */ }}
+              disabled
+            >
+              <Text className="text-gray-300 text-sm">League of Legends</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
       </View>
 
       <View className="flex-1">

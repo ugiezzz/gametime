@@ -1,3 +1,5 @@
+const SKIP_COVERAGE = process.env.RUN_RIOT_INT_TESTS === '1';
+
 module.exports = {
   preset: '@testing-library/react-native',
   moduleNameMapper: {
@@ -11,7 +13,7 @@ module.exports = {
     'node_modules/(?!((jest-)?react-native|@react-native(-community)?)|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|@unimodules/.*|unimodules|sentry-expo|native-base|react-native-svg)',
   ],
   clearMocks: true,
-  collectCoverage: true,
+  collectCoverage: !SKIP_COVERAGE,
   collectCoverageFrom: [
     './src/**/*.{js,ts}',
     '!**/coverage/**',
@@ -19,7 +21,7 @@ module.exports = {
     '!**/babel.config.js',
     '!**/jest.setup.js',
   ],
-  coverageThreshold: {
+  coverageThreshold: SKIP_COVERAGE ? undefined : {
     global: {
       branches: 30,
       functions: 30,

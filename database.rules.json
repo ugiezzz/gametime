@@ -1,122 +1,13 @@
 {
   "rules": {
-    ".read": false,
-    ".write": false,
+    ".read": "auth != null",
+    ".write": "auth != null",
 
-    "users": {
-      "$uid": {
-        ".read": "$uid === auth.uid",
-        ".write": "$uid === auth.uid",
-        "id": { ".validate": "newData.val() === auth.uid" },
-        "phoneNumber": { ".validate": "newData.isString() && newData.val().matches(/^\\+[1-9]\\d{6,14}$/)" },
-        "displayName": { ".validate": "newData.isString()" },
-        "displayNameUpdatedAt": { ".validate": "newData.isString()" },
-        "groups": { ".validate": "newData.val() == null || newData.hasChildren()", "$index": { ".validate": "newData.isString()" } },
-        "createdAt": { ".validate": "newData.isString()" },
-        "expoPushToken": { ".validate": "newData.isString()" },
-        "expoPushTokenUpdatedAt": { ".validate": "newData.isString()" },
-        "$other": { ".validate": false }
-      }
-    },
-
-    "phoneToUid": {
-      "$e164": {
-        ".read": false,
-        ".write": "auth != null && ((!data.exists() || data.val() === auth.uid) && newData.val() === auth.uid)",
-        ".validate": "newData.isString()"
-      }
-    },
-
-    "phoneInvites": {
-      "$e164": {
-        ".read": "auth != null && (auth.token.phone_number === $e164 || root.child('users/' + auth.uid + '/phoneNumber').val() === $e164)",
-        ".write": "auth != null",
-        "$groupId": {
-          ".read": "auth != null && (auth.token.phone_number === $e164 || root.child('users/' + auth.uid + '/phoneNumber').val() === $e164)",
-          ".write": "auth != null && (root.child('groups/' + $groupId + '/createdBy').val() === auth.uid || root.child('groups/' + $groupId + '/admins/' + auth.uid).exists() || root.child('users/' + auth.uid + '/phoneNumber').val() === $e164)",
-          ".validate": "newData.val() === true || newData.val() == null"
-        }
-      }
-    },
-
-    "userGroups": {
-      "$uid": {
-        ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && auth.uid === $uid",
-        "$groupId": {
-          ".read": "auth != null && auth.uid === $uid",
-        ".write": "auth != null && (auth.uid === $uid || (!newData.exists() && (root.child('groups/' + $groupId).exists() ? root.child('groups/' + $groupId + '/createdBy').val() === auth.uid : true)))"
-        }
-      }
-    },
-
-    "groups": {
-      "$groupId": {
-        ".read": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-        ".write": "auth != null && (data.exists() ? (data.child('createdBy').val() === auth.uid || data.child('admins/' + auth.uid).exists()) : newData.child('createdBy').val() === auth.uid)",
-
-        "id": { ".validate": "newData.isString()" },
-        "name": { ".validate": "newData.isString()" },
-        "createdBy": { ".validate": "data.exists() ? newData.val() === data.val() : newData.val() === auth.uid" },
-        "createdAt": { ".validate": "newData.isString()" },
-        "lastPing": { ".validate": "newData.isString() || newData.val() == null" },
-        "currentGame": { ".validate": "newData.isString() || newData.val() == null" },
-
-        "members": {
-          ".validate": "newData.val() == null || newData.hasChildren()",
-          "$index": {
-            ".write": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid || root.child('groups/' + $groupId + '/admins/' + auth.uid).exists())",
-            ".validate": "newData.hasChildren(['id','name','phoneNumber']) && newData.child('id').isString() && newData.child('name').isString() && newData.child('phoneNumber').isString() && (!newData.child('userId').exists() || newData.child('userId').isString())"
-          }
-        },
-
-        "membersByUid": {
-          "$uid": {
-            ".read": "auth != null && (auth.uid === $uid || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-            ".write": "auth != null && (auth.uid === $uid || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid || root.child('groups/' + $groupId + '/admins/' + auth.uid).exists())",
-            ".validate": "newData.val() === true"
-          }
-        },
-
-
-        "pings": {
-          ".indexOn": ["createdAtMs", "scheduledAtMs"],
-          "$pingId": {
-            ".read": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-            ".write": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-
-            "id": { ".validate": "newData.isString()" },
-            "createdBy": { ".validate": "data.exists() ? newData.val() === data.val() : newData.val() === auth.uid" },
-            "createdAtMs": { ".validate": "newData.isNumber()" },
-            "scheduledAtMs": { ".validate": "newData.val() == null || newData.isNumber()" },
-            "expiresAtMs": { ".validate": "newData.isNumber()" },
-
-            "responses": {
-              "$uid": {
-                ".read": "auth != null && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-                ".write": "auth != null && auth.uid === $uid && (root.child('groups/' + $groupId + '/membersByUid/' + auth.uid).exists() || root.child('groups/' + $groupId + '/createdBy').val() === auth.uid)",
-
-                "status": { ".validate": "newData.isString() && (newData.val() === 'pending' || newData.val() === 'eta' || newData.val() === 'declined')" },
-                "etaMinutes": { ".validate": "newData.val() == null || (newData.isNumber() && newData.val() >= 0 && newData.val() <= 180)" },
-                "updatedAtMs": { ".validate": "newData.isNumber()" },
-                "$other": { ".validate": false }
-              }
-            },
-
-            "$other": { ".validate": false }
-          }
-        },
-
-        "admins": {
-          "$adminUid": {
-            ".write": "auth != null && root.child('groups/' + $groupId + '/createdBy').val() === auth.uid",
-            ".validate": "newData.val() === true"
-          }
-        },
-
-        "$other": { ".validate": false }
-      }
-    }
+    "users": { ".read": true, ".write": true },
+    "groups": { ".read": true, ".write": true },
+    "userGroups": { ".read": true, ".write": true },
+    "phoneToUid": { ".read": true, ".write": true },
+    "phoneInvites": { ".read": true, ".write": true }
   }
 }
 

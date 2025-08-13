@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, TextInput, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, Alert, TextInput, ActivityIndicator, Modal, ScrollView } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { CustomAuthService } from '@/services/customAuthService';
 import { auth, database } from '@/config/firebase';
 import { ref, onValue, get } from 'firebase/database';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { resolveSummonerId, getSuperRegion, type SpecificRegion } from '@/services/riotService';
 
 export default function ProfileScreen() {
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -14,6 +15,10 @@ export default function ProfileScreen() {
   const [editing, setEditing] = useState(false);
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
+  const [riotIdInput, setRiotIdInput] = useState('');
+  const [riotRegionInput, setRiotRegionInput] = useState<SpecificRegion>('EUN1');
+  const [regionPickerVisible, setRegionPickerVisible] = useState(false);
+  const regions: SpecificRegion[] = ['BR1','EUN1','EUW1','JP1','KR','LA1','LA2','NA1','OC1','TR1','RU','PH2','SG2','TH2','TW2','VN2'];
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -22,10 +27,13 @@ export default function ProfileScreen() {
     const userRef = ref(database, `users/${user.uid}`);
     const unsubscribe = onValue(userRef, (snapshot) => {
       if (snapshot.exists()) {
-        const val = snapshot.val() as { displayName?: string; phoneNumber?: string };
+        const val = snapshot.val() as { displayName?: string; phoneNumber?: string; riotGameName?: string; riotTagLine?: string; riotRegion?: SpecificRegion };
         setDisplayName(val.displayName || null);
         setPhoneNumber(val.phoneNumber || null);
         if (!editing) setNameInput(val.displayName || '');
+        const riot = [val.riotGameName, val.riotTagLine].filter(Boolean).join('#');
+        setRiotIdInput(riot || '');
+        if (val.riotRegion) setRiotRegionInput(val.riotRegion as SpecificRegion);
       }
     });
 
@@ -85,6 +93,35 @@ export default function ProfileScreen() {
     }
   };
 
+  const saveRiotProfile = async () => {
+    const id = (riotIdInput || '').trim();
+    const idx = id.indexOf('#');
+    if (idx <= 0 || idx === id.length - 1) {
+      Alert.alert('Invalid Riot ID', 'Use format gameName#tagLine');
+      return;
+    }
+    try {
+      setSaving(true);
+      const { puuid, summonerId } = await resolveSummonerId(id, riotRegionInput);
+      const gameName = id.slice(0, idx);
+      const tagLine = id.slice(idx + 1);
+      const riotSuperRegion = getSuperRegion(riotRegionInput);
+      await FirebaseGroupService.updateCurrentUserRiotFields({
+        riotGameName: gameName,
+        riotTagLine: tagLine,
+        riotRegion: riotRegionInput,
+        riotSuperRegion,
+        riotPuuid: puuid,
+        riotSummonerId: summonerId,
+      });
+      Alert.alert('Saved', 'Riot profile verified and saved');
+    } catch (e: any) {
+      Alert.alert('Failed', e?.message || 'Could not verify Riot ID');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   // Owner-only test: create and delete a temp group with current auth
   const runCreateDeleteGroupTest = async () => {
     try {
@@ -129,7 +166,12 @@ export default function ProfileScreen() {
   };
 
   return (
-    <View className="flex-1 bg-gray-900 p-4">
+    <ScrollView
+      className="flex-1 bg-gray-900"
+      contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
       <View className="bg-gray-800 rounded-lg p-6 mb-6">
         <View className="items-center mb-2">
           <Text className="text-white text-xl font-bold">{displayName || phoneNumber || '—'}</Text>
@@ -164,8 +206,64 @@ export default function ProfileScreen() {
       </View>
 
       <View className="bg-gray-800 rounded-lg p-4 mb-6">
-        <Text className="text-white text-lg font-bold mb-4">Settings</Text>
-        
+        <Text className="text-white text-lg font-bold mb-4">Riot settings</Text>
+        <Text className="text-gray-300 mb-2">Riot ID (gameName#tagLine)</Text>
+        <TextInput
+          className="bg-gray-900 text-white p-3 rounded border border-gray-700 mb-3"
+          placeholder="e.g., Faker#KR1"
+          placeholderTextColor="#9CA3AF"
+          value={riotIdInput}
+          onChangeText={setRiotIdInput}
+          editable={!saving}
+        />
+        <Text className="text-gray-300 mb-2">Region</Text>
+        <TouchableOpacity
+          className="bg-gray-900 border border-gray-700 rounded px-3 py-3 mb-3"
+          onPress={() => setRegionPickerVisible(true)}
+          disabled={saving}
+        >
+          <Text className="text-white">{riotRegionInput}</Text>
+        </TouchableOpacity>
+        <Modal
+          visible={regionPickerVisible}
+          animationType="slide"
+          transparent
+          onRequestClose={() => setRegionPickerVisible(false)}
+        >
+          <View className="flex-1 justify-end bg-black/50">
+            <View className="bg-gray-800 rounded-t-xl p-4">
+              <Text className="text-white text-lg font-bold mb-3">Select Region</Text>
+              <ScrollView className="mb-3" style={{ maxHeight: '60%' }}>
+                {regions.map((r) => (
+                  <TouchableOpacity
+                    key={r}
+                    className={`flex-row items-center justify-between px-3 py-3 rounded mb-2 ${riotRegionInput === r ? 'bg-blue-600' : 'bg-gray-700'}`}
+                    onPress={() => {
+                      setRiotRegionInput(r);
+                      setRegionPickerVisible(false);
+                    }}
+                  >
+                    <Text className="text-white text-base">{r}</Text>
+                    {riotRegionInput === r && <Ionicons name="checkmark" size={18} color="#fff" />}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                className="bg-gray-700 px-4 py-3 rounded"
+                onPress={() => setRegionPickerVisible(false)}
+              >
+                <Text className="text-white text-center font-semibold">Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+        <TouchableOpacity className={`px-4 py-2 rounded ${saving ? 'bg-gray-600' : 'bg-green-600'}`} onPress={saveRiotProfile} disabled={saving}>
+          <Text className="text-white font-semibold">Save Riot Profile</Text>
+        </TouchableOpacity>
+      </View>
+
+      <View className="bg-gray-800 rounded-lg p-4 mb-6">
+        <Text className="text-white text-lg font-bold mb-4">App settings</Text>
         <TouchableOpacity className="flex-row items-center py-3 border-b border-gray-700">
           <Ionicons name="notifications-outline" size={20} color="#9CA3AF" />
           <Text className="text-white ml-3 flex-1">Notifications</Text>
@@ -209,6 +307,6 @@ export default function ProfileScreen() {
         <Ionicons name="log-out-outline" size={20} color="white" />
         <Text className="text-white font-bold ml-2">Logout</Text>
       </TouchableOpacity>
-    </View>
+    </ScrollView>
   );
 } 
