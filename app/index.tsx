@@ -27,6 +27,9 @@ export default function Index() {
       FirebaseGroupService.ensurePhoneToUidMappingForCurrentUser().catch(() => {});
       FirebaseGroupService.claimPendingInvitesForCurrentUser().catch(() => {});
 
+      // Now that the user is authenticated, save the Expo push token under users/{uid}
+      NotificationService.registerPushTokenAsync().catch(() => {});
+
       // Route to name onboarding if displayName is missing
       try {
         const snap = await get(ref(database, `users/${user.uid}`));

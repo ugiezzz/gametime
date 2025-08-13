@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Contacts from 'expo-contacts';
-import { normalizePhoneNumber, getDefaultRegion } from '@/services/phoneUtil';
+// Removed phoneUtil import - normalization now handled by FirebaseGroupService
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
 import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
@@ -96,25 +96,19 @@ export default function CreateGroupScreen() {
 
     setCreating(true);
     try {
-      const normalizePhone = (raw?: string) => {
-        if (!raw) return '';
-        const norm = normalizePhoneNumber(raw, getDefaultRegion());
-        return norm.e164 || '';
-      };
-
-      // Prefer the first valid E.164 across all numbers for each contact
+      // Don't normalize here - let FirebaseGroupService handle it with creator's region context
+      // Just pass the raw phone numbers and let the service normalize them properly
       const members = selectedContacts.map(contact => {
         const allNumbers = contact.phoneNumbers || [];
-        const candidates = allNumbers.map(n => normalizePhone(n)).filter((e): e is string => Boolean(e));
-        const best = candidates[0] || '';
+        const bestRawNumber = (allNumbers[0] || '').trim(); // Just take the first raw number
         return {
           id: contact.id,
           name: contact.name,
-          phoneNumber: best,
+          phoneNumber: bestRawNumber, // Pass raw number to service
         };
       });
 
-      await FirebaseGroupService.createGroup(groupName.trim(), members, game);
+      await FirebaseGroupService.createGroup(groupName.trim(), members);
       Alert.alert('Success', 'Group created successfully!');
       router.back();
     } catch (error) {
@@ -160,26 +154,13 @@ export default function CreateGroupScreen() {
   return (
     <View className="flex-1 bg-gray-900">
       <View className="p-4 border-b border-gray-700">
-        <View className="flex-row space-x-3">
-          <View style={{ flex: 1 }}>
-            <TextInput
-              className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
-              placeholder="Enter group name"
-              placeholderTextColor="#9CA3AF"
-              value={groupName}
-              onChangeText={setGroupName}
-            />
-          </View>
-          <View style={{ width: 160 }}>
-            <TouchableOpacity
-              className="bg-gray-800 p-4 rounded-lg border border-gray-700"
-              onPress={() => { /* single option; no dropdown needed yet */ }}
-              disabled
-            >
-              <Text className="text-gray-300 text-sm">League of Legends</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
+        <TextInput
+          className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
+          placeholder="Enter group name"
+          placeholderTextColor="#9CA3AF"
+          value={groupName}
+          onChangeText={setGroupName}
+        />
       </View>
 
       <View className="flex-1">

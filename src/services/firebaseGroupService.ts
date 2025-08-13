@@ -74,10 +74,64 @@ export class FirebaseGroupService {
       const newGroupRef = push(groupRef);
       const groupId = newGroupRef.key!;
 
-      // Normalize member phone numbers to E.164 when possible
+      // Try to infer creator's region from their saved phone number to better parse local inputs
+      let creatorRegion: string | undefined;
+      let creatorPhone: string | undefined;
+      
+      try {
+        console.log('🔍 Current user UID:', currentUser.uid);
+        
+        // Check if UID is phone-based (format: "phone:+1234567890")
+        if (currentUser.uid.startsWith('phone:')) {
+          creatorPhone = currentUser.uid.substring(6); // Remove "phone:" prefix
+          console.log('🔍 Creator phone extracted from UID:', creatorPhone);
+        } else {
+          // Try to get from database for regular UIDs
+          const creatorSnap = await get(ref(database, `${this.USERS_REF}/${currentUser.uid}`));
+          creatorPhone = creatorSnap.exists() ? (creatorSnap.val()?.phoneNumber as string | undefined) : undefined;
+          console.log('🔍 Creator phone from database:', creatorPhone);
+          
+          // Fallback: get from Firebase Auth user (if phone auth was used)
+          if (!creatorPhone && currentUser.phoneNumber) {
+            creatorPhone = currentUser.phoneNumber;
+            console.log('🔍 Creator phone from auth:', creatorPhone);
+          }
+        }
+        
+        if (creatorPhone) {
+          const parsedCreator = normalizePhoneNumber(creatorPhone);
+          creatorRegion = parsedCreator.region || undefined;
+          console.log('🌍 Detected creator region from phone', creatorPhone, ':', creatorRegion);
+        } else {
+          console.log('⚠️ No creator phone found in database, auth, or UID');
+        }
+      } catch (error) {
+        console.log('⚠️ Failed to get creator phone:', error);
+      }
+
+      // Normalize member phone numbers to E.164 when possible.
+      // If parsing fails or a "+" is missing, fall back to a sanitized +<digits> form
       const normalizedMembers = members.map((member) => {
-        const normalized = normalizePhoneNumber(member.phoneNumber);
-        const e164 = normalized.e164 || member.phoneNumber;
+        const raw = (member.phoneNumber || '').trim();
+        // Remove all non-digit characters except the leading + for international numbers
+        const cleaned = raw.startsWith('+') 
+          ? '+' + raw.substring(1).replace(/\D/g, '')
+          : raw.replace(/\D/g, '');
+        
+        console.log('📱 Original phone:', raw);
+        console.log('📱 Cleaned phone:', cleaned);
+        console.log('📱 Using region:', creatorRegion);
+        
+        const normalized = normalizePhoneNumber(cleaned, creatorRegion);
+        console.log('📱 Normalized result:', normalized);
+        
+        const digits = cleaned.replace(/\D/g, '');
+        const fallback = cleaned.startsWith('+')
+          ? cleaned
+          : (digits.length > 0 ? `+${digits}` : '');
+        const e164 = normalized.e164 || fallback;
+        console.log('📱 Final E.164:', e164);
+        
         const { userId, ...rest } = member;
         return userId ? { ...rest, userId, phoneNumber: e164 } : { ...rest, phoneNumber: e164 };
       });
