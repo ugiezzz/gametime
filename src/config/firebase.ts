@@ -1,5 +1,5 @@
 import { initializeApp } from 'firebase/app';
-import { initializeAuth, signInWithCustomToken } from 'firebase/auth';
+import { getAuth, signInWithCustomToken } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
 
@@ -15,9 +15,8 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// For React Native, Firebase Auth automatically uses AsyncStorage for persistence
-// No need to explicitly configure persistence in newer versions
-const auth = initializeAuth(app);
+// Using getAuth for now - persistence will be handled by React Native AsyncStorage automatically
+const auth = getAuth(app);
 const db = getFirestore(app); // Firestore
 const database = getDatabase(app); // Realtime Database
 

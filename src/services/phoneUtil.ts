@@ -11,7 +11,9 @@ export type NormalizedPhone = {
 };
 
 export function getDefaultRegion(): string {
-  const region = Localization.region?.toUpperCase();
+  // Use getLocales() which is the current API in expo-localization
+  const locales = Localization.getLocales();
+  const region = locales[0]?.regionCode?.toUpperCase();
   return region && /^[A-Z]{2}$/.test(region) ? region : 'US';
 }
 

@@ -24,24 +24,12 @@ interface Contact {
 
 export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState('');
-  const [game] = useState<'League of Legends'>('League of Legends'); // Default game as per PRD
+  // const [game] = useState<'League of Legends'>('League of Legends'); // Future: support multiple games
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
-  useEffect(() => {
-    // Filter contacts based on search query
-    const filtered = contacts.filter((contact) =>
-      contact.name.toLowerCase().includes(searchQuery.toLowerCase()),
-    );
-    setFilteredContacts(filtered);
-  }, [contacts, searchQuery]);
 
   const loadContacts = async () => {
     try {
@@ -78,6 +66,18 @@ export default function CreateGroupScreen() {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    loadContacts();
+  }, []);
+
+  useEffect(() => {
+    // Filter contacts based on search query
+    const filtered = contacts.filter((contact) =>
+      contact.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+    setFilteredContacts(filtered);
+  }, [contacts, searchQuery]);
 
   const toggleContactSelection = (contactId: string) => {
     setContacts((prev) =>
@@ -122,11 +122,11 @@ export default function CreateGroupScreen() {
         };
       });
 
-      await FirebaseGroupService.createGroup(groupName.trim(), members, game);
+      await FirebaseGroupService.createGroup(groupName.trim(), members);
       Alert.alert('Success', 'Group created successfully!');
       router.back();
     } catch (error) {
-      console.error('Failed to create group:', error);
+      // console.error('Failed to create group:', error); // TODO: Use proper logging service
       const message =
         error instanceof Error
           ? error.message
