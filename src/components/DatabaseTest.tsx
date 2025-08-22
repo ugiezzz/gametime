@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert } from 'react-native';
+import { get, ref, set } from 'firebase/database';
+import { useEffect, useState } from 'react';
+import { Alert, Text, TouchableOpacity, View } from 'react-native';
+
 import { database } from '@/config/firebase';
-import { ref, set, get } from 'firebase/database';
 
 export default function DatabaseTest() {
   const [isConnected, setIsConnected] = useState(false);
@@ -44,11 +45,11 @@ export default function DatabaseTest() {
   };
 
   return (
-    <View className="p-4 bg-gray-800 rounded-lg m-4">
-      <Text className="text-white text-lg font-bold mb-2">
+    <View className="m-4 rounded-lg bg-gray-800 p-4">
+      <Text className="mb-2 text-lg font-bold text-white">
         Firebase Database Test
       </Text>
-      
+
       <View className="mb-4">
         <Text className="text-white">
           Status: {isConnected ? '✅ Connected' : '❌ Not Connected'}
@@ -57,21 +58,21 @@ export default function DatabaseTest() {
 
       {testData && (
         <View className="mb-4">
-          <Text className="text-white text-sm mb-2">Test Data:</Text>
-          <Text className="text-gray-300 text-xs">{testData}</Text>
+          <Text className="mb-2 text-sm text-white">Test Data:</Text>
+          <Text className="text-xs text-gray-300">{testData}</Text>
         </View>
       )}
 
       <View className="flex-row space-x-2">
         <TouchableOpacity
-          className="bg-blue-600 px-4 py-2 rounded"
+          className="rounded bg-blue-600 px-4 py-2"
           onPress={testConnection}
         >
           <Text className="text-white">Test Connection</Text>
         </TouchableOpacity>
 
         <TouchableOpacity
-          className="bg-red-600 px-4 py-2 rounded"
+          className="rounded bg-red-600 px-4 py-2"
           onPress={clearTestData}
         >
           <Text className="text-white">Clear Data</Text>
@@ -79,4 +80,4 @@ export default function DatabaseTest() {
       </View>
     </View>
   );
-} 
+}

@@ -14,7 +14,7 @@ This is the step-by-step guide to ship GameTime on Google Play.
   - App/Business type (App)
   - Free pricing
   - Declarations (no ads, not a news app, etc. adjust as needed)
-- [ ] Confirm package name: `com.gametime.app` (already set in `app.json`)
+- [ ] Confirm package name: `com.gametimeapp.app` (already set in `app.json`)
 
 ## 3) EAS credentials and FCM (push)
 Run in project root `gameTime/`.
@@ -145,6 +145,9 @@ firebase deploy --only functions,database
 - Auth client: `gameTime/src/services/customAuthService.ts`
 - Notifications: `gameTime/src/services/notificationService.ts`
 - Database rules: `gameTime/database.rules.json`
+
+
+
 
 
 

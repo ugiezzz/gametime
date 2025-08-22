@@ -1,16 +1,24 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, Alert, Modal, Pressable, ScrollView } from 'react-native';
-import { router, useLocalSearchParams, Stack } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { get, ref } from 'firebase/database';
+import React, { useEffect, useState } from 'react';
+import {
+  Alert,
+  Modal,
+  Pressable,
+  ScrollView,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { auth, database } from '@/config/firebase';
+import { CustomAuthService } from '@/services/customAuthService';
+import type { Group, Ping } from '@/services/firebaseGroupService';
 // import { NotificationService } from '@/services/notificationService';
-import { FirebaseGroupService, Group } from '@/services/firebaseGroupService';
-import type { Ping } from '@/services/firebaseGroupService';
-import { auth } from '@/config/firebase';
-import { database } from '@/config/firebase';
-import { ref, get } from 'firebase/database';
+import { FirebaseGroupService } from '@/services/firebaseGroupService';
 import { getActiveGameStatus } from '@/services/riotService';
-import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
 // Response type removed (to be reintroduced when wiring responses)
 
@@ -25,7 +33,7 @@ export default function GroupDetailScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!FirebaseAuthService.isAuthenticated()) {
+    if (!CustomAuthService.isAuthenticated()) {
       Alert.alert('Error', 'Please sign in to view groups');
       router.replace('/auth/phone');
       return;
@@ -33,8 +41,13 @@ export default function GroupDetailScreen() {
 
     loadGroup();
     subscribeToGroup();
-    const unsub = FirebaseGroupService.subscribeToActivePings(id as string, setPings);
-    return () => { unsub && unsub(); };
+    const unsub = FirebaseGroupService.subscribeToActivePings(
+      id as string,
+      setPings,
+    );
+    return () => {
+      unsub && unsub();
+    };
   }, [id]);
 
   const loadGroup = async () => {
@@ -58,12 +71,15 @@ export default function GroupDetailScreen() {
   const subscribeToGroup = () => {
     if (!id) return;
 
-    const unsubscribe = FirebaseGroupService.subscribeToGroup(id as string, (updatedGroup) => {
-      if (updatedGroup) {
-        setGroup(updatedGroup);
-        // current game removed
-      }
-    });
+    const unsubscribe = FirebaseGroupService.subscribeToGroup(
+      id as string,
+      (updatedGroup) => {
+        if (updatedGroup) {
+          setGroup(updatedGroup);
+          // current game removed
+        }
+      },
+    );
 
     return unsubscribe;
   };
@@ -85,16 +101,16 @@ export default function GroupDetailScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-900">
-        <Text className="text-white text-lg">Loading group...</Text>
+      <View className="flex-1 items-center justify-center bg-gray-900">
+        <Text className="text-lg text-white">Loading group...</Text>
       </View>
     );
   }
 
   if (!group) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-900">
-        <Text className="text-white text-lg">Group not found</Text>
+      <View className="flex-1 items-center justify-center bg-gray-900">
+        <Text className="text-lg text-white">Group not found</Text>
       </View>
     );
   }
@@ -105,11 +121,15 @@ export default function GroupDetailScreen() {
         options={{
           headerTitle: () => (group ? <HeaderTitle group={group} /> : null),
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
               <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
             </TouchableOpacity>
           ),
-          headerRight: () => (group ? <MenuButton groupId={group.id} group={group} /> : null),
+          headerRight: () =>
+            group ? <MenuButton groupId={group.id} group={group} /> : null,
           headerStyle: { backgroundColor: '#111827' },
           headerTintColor: '#E5E7EB',
         }}
@@ -118,18 +138,27 @@ export default function GroupDetailScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Ping Button */}
         <View className="p-6">
-          <SchedulePing onSend={async (scheduledAtMs) => {
-            await handlePing(scheduledAtMs);
-          }} />
+          <SchedulePing
+            onSend={async (scheduledAtMs) => {
+              await handlePing(scheduledAtMs);
+            }}
+          />
         </View>
 
         {/* Active Pings */}
-        <View className="px-6 mb-4">
+        <View className="mb-4 px-6">
           {pings.length > 0 && (
             <>
-              <Text className="text-white text-lg font-semibold mb-2">Active Pings</Text>
+              <Text className="mb-2 text-lg font-semibold text-white">
+                Active Pings
+              </Text>
               {pings.map((ping) => (
-                <PingCard key={ping.id} ping={ping} group={group} groupId={group.id} />
+                <PingCard
+                  key={ping.id}
+                  ping={ping}
+                  group={group}
+                  groupId={group.id}
+                />
               ))}
             </>
           )}
@@ -137,9 +166,9 @@ export default function GroupDetailScreen() {
 
         {/* Empty state */}
         {pings.length === 0 && (
-          <View className="px-6 py-12 items-center">
+          <View className="items-center px-6 py-12">
             <Ionicons name="chatbubble-outline" size={64} color="#9CA3AF" />
-            <Text className="text-gray-400 text-lg mt-4">No active pings</Text>
+            <Text className="mt-4 text-lg text-gray-400">No active pings</Text>
           </View>
         )}
       </ScrollView>
@@ -147,7 +176,7 @@ export default function GroupDetailScreen() {
       {/* Modal removed as requested */}
     </SafeAreaView>
   );
-} 
+}
 
 // Inline component defs (kept here for minimal diff)
 function PingCardComponentDefs() {
@@ -159,10 +188,21 @@ function formatAbsoluteTime(dateMs: number): string {
   return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-function PingCard({ ping, group, groupId }: { ping: any; group: Group; groupId: string }) {
+function PingCard({
+  ping,
+  group,
+  groupId,
+}: {
+  ping: any;
+  group: Group;
+  groupId: string;
+}) {
   const createdAt = ping.createdAtMs as number;
   // Use scheduled time if present; else fall back to createdAt
-  const baseTimeMs: number = typeof ping.scheduledAtMs === 'number' ? (ping.scheduledAtMs as number) : createdAt;
+  const baseTimeMs: number =
+    typeof ping.scheduledAtMs === 'number'
+      ? (ping.scheduledAtMs as number)
+      : createdAt;
   // Options: 0, 5, 15 minutes from scheduled time
   const minuteOptions: number[] = [0, 5, 15];
   const now = Date.now();
@@ -179,20 +219,40 @@ function PingCard({ ping, group, groupId }: { ping: any; group: Group; groupId: 
   for (const m of group.members ?? []) uidToName.set(m.id, m.name);
   const viewerUid = auth.currentUser?.uid;
   if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
-  if (group.createdBy && !uidToName.has(group.createdBy)) uidToName.set(group.createdBy, 'Creator');
+  if (group.createdBy && !uidToName.has(group.createdBy))
+    uidToName.set(group.createdBy, 'Creator');
 
-  const memberUidsFromGroup = Array.isArray(group.members) && group.members.length > 0
-    ? group.members.map((m) => m.id)
-    : Object.keys(group.membersByUid || {});
-  const allUids = new Set<string>([...Object.keys(responses), ...memberUidsFromGroup]);
+  const memberUidsFromGroup =
+    Array.isArray(group.members) && group.members.length > 0
+      ? group.members.map((m) => m.id)
+      : Object.keys(group.membersByUid || {});
+  const allUids = new Set<string>([
+    ...Object.keys(responses),
+    ...memberUidsFromGroup,
+  ]);
   const selectedTargets: number[] = [];
   for (const uid of allUids) {
     const name = uidToName.get(uid) || 'Member';
     const r = responses[uid];
-    if (!r) { pending.push(name); continue; }
-    if (r.status === 'declined') { declined.push(name); continue; }
-    if (r.status === 'pending') { pending.push(name); continue; }
-    if (r.status === 'eta' && (r.etaMinutes === null || r.etaMinutes === undefined)) { nextRound.push(name); continue; }
+    if (!r) {
+      pending.push(name);
+      continue;
+    }
+    if (r.status === 'declined') {
+      declined.push(name);
+      continue;
+    }
+    if (r.status === 'pending') {
+      pending.push(name);
+      continue;
+    }
+    if (
+      r.status === 'eta' &&
+      (r.etaMinutes === null || r.etaMinutes === undefined)
+    ) {
+      nextRound.push(name);
+      continue;
+    }
     if (r.status === 'eta' && typeof r.etaMinutes === 'number') {
       const targetMs = baseTimeMs + Math.max(0, r.etaMinutes) * 60000;
       const label = formatAbsoluteTime(targetMs);
@@ -203,84 +263,142 @@ function PingCard({ ping, group, groupId }: { ping: any; group: Group; groupId: 
     }
   }
   // Sort times ascending
-  const sorted = Array.from(buckets.entries()).sort((a, b) => new Date(`1970-01-01T${a[0]}`).getTime() - new Date(`1970-01-01T${b[0]}`).getTime());
+  const sorted = Array.from(buckets.entries()).sort(
+    (a, b) =>
+      new Date(`1970-01-01T${a[0]}`).getTime() -
+      new Date(`1970-01-01T${b[0]}`).getTime(),
+  );
 
   const meSelected = viewerUid ? !!responses[viewerUid] : false;
   // const selectedCount = selectedTargets.length;
-  const earliestSelectedMs = selectedTargets.length > 0 ? Math.min(...selectedTargets) : baseTimeMs;
+  const earliestSelectedMs =
+    selectedTargets.length > 0 ? Math.min(...selectedTargets) : baseTimeMs;
   const earliestSelectedLabel = formatAbsoluteTime(earliestSelectedMs);
   const earliestNames = (() => {
     const lbl = formatAbsoluteTime(earliestSelectedMs);
     const arr = buckets.get(lbl) || [];
     return arr;
   })();
-  const selectionTitle = meSelected || viewerUid === ping.createdBy ? 'Change start time' : 'Will you join?';
+  const selectionTitle =
+    meSelected || viewerUid === ping.createdBy
+      ? 'Change start time'
+      : 'Will you join?';
 
   return (
-    <View className="bg-gray-800 p-4 rounded-lg mb-3">
+    <View className="mb-3 rounded-lg bg-gray-800 p-4">
       <View className="flex-row justify-between">
         <View className="flex-1" />
         {now < baseTimeMs ? (
-          <Text className="text-gray-400 text-xs">{startsInMin}m until start</Text>
+          <Text className="text-xs text-gray-400">
+            {startsInMin}m until start
+          </Text>
         ) : (
-          <Text className="text-gray-400 text-xs">{timeLeftMin}m left</Text>
+          <Text className="text-xs text-gray-400">{timeLeftMin}m left</Text>
         )}
       </View>
-      <Text className="text-white text-xl font-extrabold mt-2" numberOfLines={2}>
-        {earliestNames.length > 0 ? `${earliestNames.join(', ')} start playing at ${earliestSelectedLabel}` : `Start playing at ${earliestSelectedLabel}`}
+      <Text
+        className="mt-2 text-xl font-extrabold text-white"
+        numberOfLines={2}
+      >
+        {earliestNames.length > 0
+          ? `${earliestNames.join(', ')} start playing at ${earliestSelectedLabel}`
+          : `Start playing at ${earliestSelectedLabel}`}
       </Text>
 
       {/* Gathering time */}
       <View className="mb-3">
-      {sorted.length > 0 && (
-        <View className="mt-3 mb-2">
-          {sorted.map(([timeLabel, names]: [string, string[]]) => (
-            <View key={timeLabel} className="flex-row items-center mb-1">
-              <Text className="text-white text-base font-semibold mr-2">{timeLabel}</Text>
-              <Text className="text-gray-300 text-sm">{names.join(', ')}</Text>
-            </View>
-          ))}
-        </View>
-      )}
+        {sorted.length > 0 && (
+          <View className="mb-2 mt-3">
+            {sorted.map(([timeLabel, names]: [string, string[]]) => (
+              <View key={timeLabel} className="mb-1 flex-row items-center">
+                <Text className="mr-2 text-base font-semibold text-white">
+                  {timeLabel}
+                </Text>
+                <Text className="text-sm text-gray-300">
+                  {names.join(', ')}
+                </Text>
+              </View>
+            ))}
+          </View>
+        )}
         {nextRound.length > 0 && (
-          <View className="flex-row items-center mb-1">
-            <Text className="text-purple-400 text-sm font-semibold mr-2">Next round</Text>
-            <Text className="text-gray-300 text-sm">{nextRound.join(', ')}</Text>
+          <View className="mb-1 flex-row items-center">
+            <Text className="mr-2 text-sm font-semibold text-purple-400">
+              Next round
+            </Text>
+            <Text className="text-sm text-gray-300">
+              {nextRound.join(', ')}
+            </Text>
           </View>
         )}
         {pending.length > 0 && (
-          <View className="flex-row items-center mb-1">
-            <Text className="text-yellow-400 text-sm font-semibold mr-2">Pending</Text>
-            <Text className="text-gray-300 text-sm">{pending.join(', ')}</Text>
+          <View className="mb-1 flex-row items-center">
+            <Text className="mr-2 text-sm font-semibold text-yellow-400">
+              Pending
+            </Text>
+            <Text className="text-sm text-gray-300">{pending.join(', ')}</Text>
           </View>
         )}
         {declined.length > 0 && (
-          <View className="flex-row items-center mb-1">
-            <Text className="text-gray-400 text-sm font-semibold mr-2">Not today</Text>
-            <Text className="text-gray-300 text-sm">{declined.join(', ')}</Text>
+          <View className="mb-1 flex-row items-center">
+            <Text className="mr-2 text-sm font-semibold text-gray-400">
+              Not today
+            </Text>
+            <Text className="text-sm text-gray-300">{declined.join(', ')}</Text>
           </View>
         )}
-        {sorted.length === 0 && nextRound.length === 0 && pending.length === 0 && declined.length === 0 && (
-          <Text className="text-gray-400">No responses yet</Text>
-        )}
+        {sorted.length === 0 &&
+          nextRound.length === 0 &&
+          pending.length === 0 &&
+          declined.length === 0 && (
+            <Text className="text-gray-400">No responses yet</Text>
+          )}
       </View>
 
       {/* Will you join / Change selection */}
-      <Text className="text-gray-100 font-semibold mb-3 text-left">{selectionTitle}</Text>
-      <View className="flex-row mb-3">
+      <Text className="mb-3 text-left font-semibold text-gray-100">
+        {selectionTitle}
+      </Text>
+      <View className="mb-3 flex-row">
         {minuteOptions.map((m) => (
-          <EtaButton key={m} minutes={m} label={formatAbsoluteTime(baseTimeMs + m * 60000)} pingId={ping.id} groupId={groupId} />
+          <EtaButton
+            key={m}
+            minutes={m}
+            label={formatAbsoluteTime(baseTimeMs + m * 60000)}
+            pingId={ping.id}
+            groupId={groupId}
+          />
         ))}
       </View>
       <View className="flex-row">
-        <TextButton label="Next round" onPress={async () => { await FirebaseGroupService.respondNextRound(groupId, ping.id); }} />
-        <TextButton label="Not today" onPress={async () => { await FirebaseGroupService.respondNotToday(groupId, ping.id); }} />
+        <TextButton
+          label="Next round"
+          onPress={async () => {
+            await FirebaseGroupService.respondNextRound(groupId, ping.id);
+          }}
+        />
+        <TextButton
+          label="Not today"
+          onPress={async () => {
+            await FirebaseGroupService.respondNotToday(groupId, ping.id);
+          }}
+        />
       </View>
     </View>
   );
 }
 
-function EtaButton({ minutes, label, pingId, groupId }: { minutes: number; label: string; pingId: string; groupId: string }) {
+function EtaButton({
+  minutes,
+  label,
+  pingId,
+  groupId,
+}: {
+  minutes: number;
+  label: string;
+  pingId: string;
+  groupId: string;
+}) {
   const onPress = async () => {
     try {
       await FirebaseGroupService.respondToPing(groupId, pingId, minutes);
@@ -290,29 +408,37 @@ function EtaButton({ minutes, label, pingId, groupId }: { minutes: number; label
   };
   return (
     <TouchableOpacity
-      className="bg-blue-600 px-3 py-3 rounded flex-1 items-center active:opacity-80 mx-1"
+      className="mx-1 flex-1 items-center rounded bg-blue-600 p-3 active:opacity-80"
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Text className="text-white text-sm font-semibold">{label}</Text>
+      <Text className="text-sm font-semibold text-white">{label}</Text>
     </TouchableOpacity>
   );
 }
 
-function TextButton({ label, onPress }: { label: string; onPress: () => void }) {
+function TextButton({
+  label,
+  onPress,
+}: {
+  label: string;
+  onPress: () => void;
+}) {
   return (
     <TouchableOpacity
-      className="bg-gray-700 px-3 py-3 rounded flex-1 items-center active:opacity-80 mx-1"
+      className="mx-1 flex-1 items-center rounded bg-gray-700 p-3 active:opacity-80"
       onPress={onPress}
       activeOpacity={0.8}
     >
-      <Text className="text-white text-sm font-semibold">{label}</Text>
+      <Text className="text-sm font-semibold text-white">{label}</Text>
     </TouchableOpacity>
   );
 }
 
 function HeaderTitle({ group }: { group: Group }) {
-  const [members, setMembers] = React.useState<Array<{ uid: string; name: string }>>([]);
+  const [members, setMembers] = React.useState<
+    Array<{ uid: string; name: string }>
+  >([]);
   const [statuses, setStatuses] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
@@ -320,7 +446,9 @@ function HeaderTitle({ group }: { group: Group }) {
     const loadNames = async () => {
       // Prefer deprecated display list if present (older groups)
       const displayList = Array.isArray(group.members)
-        ? group.members.map((m) => ({ uid: m.id, name: m.name })).filter((m) => !!m.name)
+        ? group.members
+            .map((m) => ({ uid: m.id, name: m.name }))
+            .filter((m) => !!m.name)
         : [];
       if (displayList.length > 0) {
         if (!cancelled) setMembers(displayList);
@@ -373,7 +501,9 @@ function HeaderTitle({ group }: { group: Group }) {
       for (const uid of uids) {
         try {
           const puuidSnap = await get(ref(database, `users/${uid}/riotPuuid`));
-          const regionSnap = await get(ref(database, `users/${uid}/riotRegion`));
+          const regionSnap = await get(
+            ref(database, `users/${uid}/riotRegion`),
+          );
           const puuid = puuidSnap.exists() ? String(puuidSnap.val()) : '';
           const region = regionSnap.exists() ? String(regionSnap.val()) : '';
           if (!puuid || !region) continue;
@@ -395,17 +525,26 @@ function HeaderTitle({ group }: { group: Group }) {
     };
   }, [group.game, group.membersByUid]);
 
-  const fallbackCount = (group.members?.length ?? (group.membersByUid ? Object.keys(group.membersByUid).length : 0)) as number;
+  const fallbackCount = (group.members?.length ??
+    (group.membersByUid
+      ? Object.keys(group.membersByUid).length
+      : 0)) as number;
 
   return (
     <View>
-      <Text className="text-white text-base font-semibold" numberOfLines={1}>
+      <Text className="text-base font-semibold text-white" numberOfLines={1}>
         {group.name}
       </Text>
-      <Text className="text-gray-400 text-xs" numberOfLines={1} ellipsizeMode="tail">
+      <Text
+        className="text-xs text-gray-400"
+        numberOfLines={1}
+        ellipsizeMode="tail"
+      >
         {members.length > 0
           ? members
-              .map(({ uid, name }) => (statuses[uid] ? `${name} (${statuses[uid]})` : name))
+              .map(({ uid, name }) =>
+                statuses[uid] ? `${name} (${statuses[uid]})` : name,
+              )
               .join(', ')
           : `${fallbackCount} member${fallbackCount === 1 ? '' : 's'}`}
       </Text>
@@ -414,7 +553,11 @@ function HeaderTitle({ group }: { group: Group }) {
 }
 
 // Scheduling widget for PING
-function SchedulePing({ onSend }: { onSend: (scheduledAtMs?: number) => Promise<void> }) {
+function SchedulePing({
+  onSend,
+}: {
+  onSend: (scheduledAtMs?: number) => Promise<void>;
+}) {
   const now = new Date();
   const roundUp10 = (d: Date) => {
     const m = d.getMinutes();
@@ -425,46 +568,113 @@ function SchedulePing({ onSend }: { onSend: (scheduledAtMs?: number) => Promise<
   };
   const [time, setTime] = React.useState<Date>(roundUp10(now));
 
-  const incHour = () => setTime((t) => new Date(t.getFullYear(), t.getMonth(), t.getDate(), t.getHours() + 1, t.getMinutes(), 0, 0));
-  const decHour = () => setTime((t) => new Date(t.getFullYear(), t.getMonth(), t.getDate(), t.getHours() - 1, t.getMinutes(), 0, 0));
-  const incMin = () => setTime((t) => new Date(t.getFullYear(), t.getMonth(), t.getDate(), t.getHours(), t.getMinutes() + 10, 0, 0));
-  const decMin = () => setTime((t) => new Date(t.getFullYear(), t.getMonth(), t.getDate(), t.getHours(), t.getMinutes() - 10, 0, 0));
+  const incHour = () =>
+    setTime(
+      (t) =>
+        new Date(
+          t.getFullYear(),
+          t.getMonth(),
+          t.getDate(),
+          t.getHours() + 1,
+          t.getMinutes(),
+          0,
+          0,
+        ),
+    );
+  const decHour = () =>
+    setTime(
+      (t) =>
+        new Date(
+          t.getFullYear(),
+          t.getMonth(),
+          t.getDate(),
+          t.getHours() - 1,
+          t.getMinutes(),
+          0,
+          0,
+        ),
+    );
+  const incMin = () =>
+    setTime(
+      (t) =>
+        new Date(
+          t.getFullYear(),
+          t.getMonth(),
+          t.getDate(),
+          t.getHours(),
+          t.getMinutes() + 10,
+          0,
+          0,
+        ),
+    );
+  const decMin = () =>
+    setTime(
+      (t) =>
+        new Date(
+          t.getFullYear(),
+          t.getMonth(),
+          t.getDate(),
+          t.getHours(),
+          t.getMinutes() - 10,
+          0,
+          0,
+        ),
+    );
 
   // label kept for possible future preview text
   const send = () => onSend(time.getTime());
 
   return (
-    <View className="bg-blue-600 rounded-lg p-4">
+    <View className="rounded-lg bg-blue-600 p-4">
       <View className="flex-row items-center justify-between">
         {/* Left block: Icon/Title and Send button */}
         <View className="flex-1 items-center justify-center pr-4">
-          <View className="flex-row items-center mb-3 justify-center">
+          <View className="mb-3 flex-row items-center justify-center">
             <Ionicons name="game-controller" size={32} color="white" />
-            <Text className="text-white text-xl font-bold ml-2">PING</Text>
+            <Text className="ml-2 text-xl font-bold text-white">PING</Text>
           </View>
-          <TouchableOpacity className="bg-white rounded py-3 items-center px-6" onPress={send}>
-            <Text className="text-blue-700 font-semibold">Send</Text>
+          <TouchableOpacity
+            className="items-center rounded bg-white px-6 py-3"
+            onPress={send}
+          >
+            <Text className="font-semibold text-blue-700">Send</Text>
           </TouchableOpacity>
         </View>
 
         {/* Right block: time pickers */}
         <View className="flex-row items-center">
-          <View className="items-center mx-4">
-            <TouchableOpacity onPress={incHour} className="bg-blue-700 w-9 h-9 rounded-lg items-center justify-center mb-2 active:opacity-80">
+          <View className="mx-4 items-center">
+            <TouchableOpacity
+              onPress={incHour}
+              className="mb-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+            >
               <Ionicons name="chevron-up" size={18} color="white" />
             </TouchableOpacity>
-            <Text className="text-white text-2xl font-semibold my-1">{String(time.getHours()).padStart(2, '0')}</Text>
-            <TouchableOpacity onPress={decHour} className="bg-blue-700 w-9 h-9 rounded-lg items-center justify-center mt-2 active:opacity-80">
+            <Text className="my-1 text-2xl font-semibold text-white">
+              {String(time.getHours()).padStart(2, '0')}
+            </Text>
+            <TouchableOpacity
+              onPress={decHour}
+              className="mt-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+            >
               <Ionicons name="chevron-down" size={18} color="white" />
             </TouchableOpacity>
           </View>
-          <Text className="text-white text-2xl font-bold">:</Text>
-          <View className="items-center mx-4">
-            <TouchableOpacity onPress={incMin} className="bg-blue-700 w-9 h-9 rounded-lg items-center justify-center mb-2 active:opacity-80">
+          <Text className="text-2xl font-bold text-white">:</Text>
+          <View className="mx-4 items-center">
+            <TouchableOpacity
+              onPress={incMin}
+              className="mb-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+            >
               <Ionicons name="chevron-up" size={18} color="white" />
             </TouchableOpacity>
-            <Text className="text-white text-2xl font-semibold my-1">{String(time.getMinutes()).padStart(2, '0')}</Text>
-            <TouchableOpacity onPress={decMin} className="bg-blue-700 w-9 h-9 rounded-lg items-center justify-center mt-2 active:opacity-80">
+            <Text className="my-1 text-2xl font-semibold text-white">
+              {String(time.getMinutes()).padStart(2, '0')}
+            </Text>
+            <TouchableOpacity
+              onPress={decMin}
+              className="mt-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+            >
               <Ionicons name="chevron-down" size={18} color="white" />
             </TouchableOpacity>
           </View>
@@ -499,26 +709,33 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
 
   const handleAddMember = () => {
     setOpen(false);
-    router.push({ pathname: `/group/${groupId}/add-members`, params: { groupName: group.name } });
+    router.push({
+      pathname: `/group/${groupId}/add-members`,
+      params: { groupName: group.name },
+    });
   };
 
   const handleDeleteGroup = async () => {
-    Alert.alert('Delete group', 'This will permanently remove the group for all members. Continue?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Delete',
-        style: 'destructive',
-        onPress: async () => {
-          try {
-            await FirebaseGroupService.deleteGroup(groupId);
-            setOpen(false);
-            router.back();
-          } catch (e: any) {
-            Alert.alert('Error', e?.message || 'Failed to delete group');
-          }
+    Alert.alert(
+      'Delete group',
+      'This will permanently remove the group for all members. Continue?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await FirebaseGroupService.deleteGroup(groupId);
+              setOpen(false);
+              router.back();
+            } catch (e: any) {
+              Alert.alert('Error', e?.message || 'Failed to delete group');
+            }
+          },
         },
-      },
-    ]);
+      ],
+    );
   };
 
   return (
@@ -527,32 +744,49 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
         <Ionicons name="ellipsis-vertical" size={22} color="#9CA3AF" />
       </TouchableOpacity>
       {open && (
-        <Modal transparent animationType="fade" visible onRequestClose={() => setOpen(false)}>
+        <Modal
+          transparent
+          animationType="fade"
+          visible
+          onRequestClose={() => setOpen(false)}
+        >
           <Pressable style={{ flex: 1 }} onPress={() => setOpen(false)}>
             <View style={{ flex: 1, alignItems: 'flex-end' }}>
-              <View className="mt-10 mr-2 bg-gray-800 rounded-lg p-2 w-48 border border-gray-700">
+              <View className="mr-2 mt-10 w-48 rounded-lg border border-gray-700 bg-gray-800 p-2">
                 <>
                   <TouchableOpacity className="py-2" onPress={handleAddMember}>
-                    <Text className="text-white text-sm">Add members</Text>
+                    <Text className="text-sm text-white">Add members</Text>
                   </TouchableOpacity>
                   {canManage && (
                     <>
-                      <View className="h-[1px] bg-gray-700 my-1" />
-                      <TouchableOpacity className="py-2" onPress={handleDeleteGroup}>
-                        <Text className="text-red-400 text-sm">Delete group</Text>
+                      <View className="my-1 h-px bg-gray-700" />
+                      <TouchableOpacity
+                        className="py-2"
+                        onPress={handleDeleteGroup}
+                      >
+                        <Text className="text-sm text-red-400">
+                          Delete group
+                        </Text>
                       </TouchableOpacity>
-                      <View className="h-[1px] bg-gray-700 my-1" />
-                      {Array.isArray(group.members) && group.members.length > 0 &&
+                      <View className="my-1 h-px bg-gray-700" />
+                      {Array.isArray(group.members) &&
+                        group.members.length > 0 &&
                         group.members.map((m) => (
-                          <TouchableOpacity key={m.id} className="py-2" onPress={() => handleRemoveMember(m.id)}>
-                            <Text className="text-white text-sm">Remove {m.name}</Text>
+                          <TouchableOpacity
+                            key={m.id}
+                            className="py-2"
+                            onPress={() => handleRemoveMember(m.id)}
+                          >
+                            <Text className="text-sm text-white">
+                              Remove {m.name}
+                            </Text>
                           </TouchableOpacity>
                         ))}
                     </>
                   )}
-                  <View className="h-[1px] bg-gray-700 my-1" />
+                  <View className="my-1 h-px bg-gray-700" />
                   <TouchableOpacity className="py-2" onPress={handleExit}>
-                    <Text className="text-red-400 text-sm">Exit group</Text>
+                    <Text className="text-sm text-red-400">Exit group</Text>
                   </TouchableOpacity>
                 </>
               </View>

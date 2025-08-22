@@ -1,6 +1,16 @@
-import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert, KeyboardAvoidingView, Platform, Modal } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
 import { CustomAuthService } from '@/services/customAuthService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
 
@@ -35,8 +45,12 @@ export default function OTPScreen() {
 
       // Ensure a basic profile exists immediately after successful verification
       try {
-        const createPromise = FirebaseGroupService.createUserProfile(String(phoneNumber));
-        const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 6000));
+        const createPromise = FirebaseGroupService.createUserProfile(
+          String(phoneNumber),
+        );
+        const timeout = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('timeout')), 6000),
+        );
         await Promise.race([createPromise, timeout]);
       } catch {
         // non-blocking; user can still proceed to set name
@@ -63,7 +77,10 @@ export default function OTPScreen() {
 
   const handleResendOTP = async () => {
     if (!phoneNumber) {
-      Alert.alert('Error', 'Phone number missing. Go back and enter your phone again.');
+      Alert.alert(
+        'Error',
+        'Phone number missing. Go back and enter your phone again.',
+      );
       return;
     }
     if (resending) return;
@@ -87,8 +104,13 @@ export default function OTPScreen() {
     }
     try {
       setSavingProfile(true);
-      const savePromise = FirebaseGroupService.createUserProfile(String(phoneNumber), name);
-      const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 8000));
+      const savePromise = FirebaseGroupService.createUserProfile(
+        String(phoneNumber),
+        name,
+      );
+      const timeout = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 8000),
+      );
       await Promise.race([savePromise, timeout]);
 
       setAskNameVisible(false);
@@ -97,25 +119,30 @@ export default function OTPScreen() {
       console.log('Failed to finalize profile:', e);
       // Proceed anyway to avoid blocking the user; profile can be completed later
       setAskNameVisible(false);
-      Alert.alert('Saved later', 'We could not save your name right now. You can update it later in Profile.');
+      Alert.alert(
+        'Saved later',
+        'We could not save your name right now. You can update it later in Profile.',
+      );
       router.replace('/(tabs)');
-    }
-    finally {
+    } finally {
       setSavingProfile(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView className="flex-1 bg-gray-900" behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
-      <View className="flex-1 justify-center items-center px-6">
-        <Text className="text-white text-2xl font-bold mb-6">Verify Phone</Text>
-        <Text className="text-white text-lg mb-6 text-center">
+    <KeyboardAvoidingView
+      className="flex-1 bg-gray-900"
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <View className="flex-1 items-center justify-center px-6">
+        <Text className="mb-6 text-2xl font-bold text-white">Verify Phone</Text>
+        <Text className="mb-6 text-center text-lg text-white">
           Enter the 6-digit code sent to your phone
         </Text>
 
-        <View className="w-full mb-10">
+        <View className="mb-10 w-full">
           <TextInput
-            className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg text-center"
+            className="rounded-lg border border-gray-700 bg-gray-800 p-4 text-center text-lg text-white"
             placeholder="Enter OTP"
             placeholderTextColor="#9CA3AF"
             value={otp}
@@ -127,17 +154,19 @@ export default function OTPScreen() {
         </View>
 
         <TouchableOpacity
-          className={`w-full p-4 rounded-lg mb-4 ${loading ? 'bg-gray-600' : 'bg-blue-600'}`}
+          className={`mb-4 w-full rounded-lg p-4 ${loading ? 'bg-gray-600' : 'bg-blue-600'}`}
           onPress={() => handleVerifyOTP()}
           disabled={loading}
         >
-          <Text className="text-white text-center font-bold text-lg">
+          <Text className="text-center text-lg font-bold text-white">
             {loading ? 'Verifying...' : 'Verify'}
           </Text>
         </TouchableOpacity>
 
         <TouchableOpacity onPress={handleResendOTP} disabled={resending}>
-          <Text className="text-blue-400 text-center mt-2">{resending ? 'Resending…' : 'Resend code'}</Text>
+          <Text className="mt-2 text-center text-blue-400">
+            {resending ? 'Resending…' : 'Resend code'}
+          </Text>
         </TouchableOpacity>
       </View>
 
@@ -147,11 +176,13 @@ export default function OTPScreen() {
         animationType="slide"
         onRequestClose={() => {}}
       >
-        <View className="flex-1 justify-center items-center bg-black bg-opacity-50">
-          <View className="bg-gray-800 p-6 rounded-lg mx-6 w-full max-w-sm">
-            <Text className="text-white text-xl font-bold mb-4 text-center">Your Name</Text>
+        <View className="flex-1 items-center justify-center bg-black bg-opacity-50">
+          <View className="mx-6 w-full max-w-sm rounded-lg bg-gray-800 p-6">
+            <Text className="mb-4 text-center text-xl font-bold text-white">
+              Your Name
+            </Text>
             <TextInput
-              className="bg-gray-700 text-white px-4 py-5 rounded-lg border border-gray-600 text-lg mb-4"
+              className="mb-4 rounded-lg border border-gray-600 bg-gray-700 px-4 py-5 text-lg text-white"
               placeholder="Enter your name"
               placeholderTextColor="#9CA3AF"
               value={displayName}
@@ -160,15 +191,17 @@ export default function OTPScreen() {
               style={{ paddingBottom: 12 }}
             />
             <TouchableOpacity
-              className={`p-3 rounded-lg ${savingProfile ? 'bg-gray-600' : 'bg-blue-600'}`}
+              className={`rounded-lg p-3 ${savingProfile ? 'bg-gray-600' : 'bg-blue-600'}`}
               onPress={handleSubmitName}
               disabled={savingProfile}
             >
-              <Text className="text-white text-center font-semibold">{savingProfile ? 'Saving...' : 'Continue'}</Text>
+              <Text className="text-center font-semibold text-white">
+                {savingProfile ? 'Saving...' : 'Continue'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
     </KeyboardAvoidingView>
   );
-} 
+}

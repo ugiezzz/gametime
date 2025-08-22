@@ -49,7 +49,7 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error('❌ Reset failed:', err?.message || err);
+  console.error('❌ Reset failed:', err && err.message || err);
   process.exit(1);
 });
 

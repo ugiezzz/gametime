@@ -1,9 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Alert } from 'react-native';
-import { router } from 'expo-router';
 import * as Notifications from 'expo-notifications';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import { Alert, Text, TextInput, TouchableOpacity, View } from 'react-native';
+
 import { CustomAuthService } from '@/services/customAuthService';
-import { getDefaultRegion, normalizePhoneNumber, formatExamplePlaceholder } from '@/services/phoneUtil';
+import {
+  formatExamplePlaceholder,
+  getDefaultRegion,
+  normalizePhoneNumber,
+} from '@/services/phoneUtil';
 
 function inferCountryCode(regionInput?: string): string {
   // Minimal map for prefix in placeholder; final normalization is library-based
@@ -36,9 +41,14 @@ export default function PhoneScreen() {
 
   const requestPermissions = async () => {
     try {
-      const { status: notificationStatus } = await Notifications.requestPermissionsAsync();
+      const { status: notificationStatus } =
+        await Notifications.requestPermissionsAsync();
       if (notificationStatus !== 'granted') {
-        Alert.alert('Notifications', 'Please enable notifications to receive pings from your friends.', [{ text: 'OK' }]);
+        Alert.alert(
+          'Notifications',
+          'Please enable notifications to receive pings from your friends.',
+          [{ text: 'OK' }],
+        );
       }
     } catch (error) {
       console.log('Permission request error:', error);
@@ -68,13 +78,15 @@ export default function PhoneScreen() {
   };
 
   return (
-    <View className="flex-1 justify-center items-center px-6 bg-gray-900">
-      <Text className="text-white text-2xl font-bold mb-8">GameTime</Text>
-      <Text className="text-white text-lg mb-8 text-center">Enter your phone number to get started</Text>
+    <View className="flex-1 items-center justify-center bg-gray-900 px-6">
+      <Text className="mb-8 text-2xl font-bold text-white">GameTime</Text>
+      <Text className="mb-8 text-center text-lg text-white">
+        Enter your phone number to get started
+      </Text>
 
-      <View className="w-full mb-6">
+      <View className="mb-6 w-full">
         <TextInput
-          className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
+          className="rounded-lg border border-gray-700 bg-gray-800 p-4 text-lg text-white"
           placeholder={`e.g. ${defaultCode} ${formatExamplePlaceholder(region)}`}
           placeholderTextColor="#9CA3AF"
           value={phoneNumber}
@@ -85,12 +97,14 @@ export default function PhoneScreen() {
       </View>
 
       <TouchableOpacity
-        className={`w-full p-4 rounded-lg ${loading ? 'bg-gray-600' : 'bg-blue-600'}`}
+        className={`w-full rounded-lg p-4 ${loading ? 'bg-gray-600' : 'bg-blue-600'}`}
         onPress={handleSendOTP}
         disabled={loading}
       >
-        <Text className="text-white text-center font-bold text-lg">{loading ? 'Sending…' : 'Next'}</Text>
+        <Text className="text-center text-lg font-bold text-white">
+          {loading ? 'Sending…' : 'Next'}
+        </Text>
       </TouchableOpacity>
     </View>
   );
-} 
+}

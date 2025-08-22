@@ -9,15 +9,33 @@ This is the step-by-step guide to ship GameTime on the Apple App Store.
 - [ ] Privacy Policy URL (public)
 
 ## 2) Bundle ID and Capabilities
-- [ ] In Apple Developer portal → Identifiers → create App ID: `com.gametime.app`
+- [ ] In Apple Developer portal → Identifiers → create App ID: `com.gametimeapp.app`
 - [ ] Enable capability: Push Notifications
 - [ ] Associated Domains: not required (only for universal links)
 
 ## 3) App Store Connect App Record
-- [ ] Create new iOS app: Name, SKU, Bundle ID `com.gametime.app`, Default language
+- [ ] Create new iOS app: Name, SKU, Bundle ID `com.gametimeapp.app`, Default language
 - [ ] Pricing: Free
 
-## 4) EAS credentials and Push setup
+## 4) Push Notification Certificate Setup
+
+### Option A: Manual CSR Generation (if needed)
+If you need to manually create APNS certificates:
+
+```bash
+# Generate CSR file using our script
+# Windows PowerShell:
+./scripts/generate-csr.ps1
+
+# macOS/Linux:
+./scripts/generate-csr.sh
+```
+
+- [ ] Generate CSR file using the script above OR via Keychain Access (see `docs/CSR_GENERATION_GUIDE.md`)
+- [ ] Upload CSR to Apple Developer Portal → Certificates → Apple Push Notification service SSL (Sandbox)
+- [ ] Download the certificate and install in Keychain Access
+
+### Option B: EAS Automated Setup (Recommended)
 Run in project root `gameTime/`.
 
 ```bash
@@ -142,6 +160,12 @@ firebase deploy --only functions,database
 - Auth client: `gameTime/src/services/customAuthService.ts`
 - Notifications: `gameTime/src/services/notificationService.ts`
 - Database rules: `gameTime/database.rules.json`
+- CSR Generation Guide: `gameTime/docs/CSR_GENERATION_GUIDE.md`
+- CSR Scripts: `gameTime/scripts/generate-csr.ps1` (Windows) or `gameTime/scripts/generate-csr.sh` (macOS/Linux)
+
+
+
+
 
 
 

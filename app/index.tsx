@@ -1,14 +1,15 @@
 // app/index.tsx
-import { useEffect } from 'react';
-import { View, Text } from 'react-native';
 import { router } from 'expo-router';
-import { CustomAuthService } from '@/services/customAuthService';
-import { NotificationService } from '@/services/notificationService';
-import { FirebaseGroupService } from '@/services/firebaseGroupService';
-import { configureRiotService } from '@/services/riotService';
-import { getRiotApiKey } from '@/config/riotConfig';
+import { get, ref } from 'firebase/database';
+import { useEffect } from 'react';
+import { Text, View } from 'react-native';
+
 import { database } from '@/config/firebase';
-import { ref, get } from 'firebase/database';
+import { getRiotApiKey } from '@/config/riotConfig';
+import { CustomAuthService } from '@/services/customAuthService';
+import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { NotificationService } from '@/services/notificationService';
+import { configureRiotService } from '@/services/riotService';
 
 export default function Index() {
   useEffect(() => {
@@ -24,7 +25,9 @@ export default function Index() {
       }
 
       // Non-blocking: ensure phone->uid mapping and claim any pending phone-based invites
-      FirebaseGroupService.ensurePhoneToUidMappingForCurrentUser().catch(() => {});
+      FirebaseGroupService.ensurePhoneToUidMappingForCurrentUser().catch(
+        () => {},
+      );
       FirebaseGroupService.claimPendingInvitesForCurrentUser().catch(() => {});
 
       // Now that the user is authenticated, save the Expo push token under users/{uid}
@@ -33,7 +36,10 @@ export default function Index() {
       // Route to name onboarding if displayName is missing
       try {
         const snap = await get(ref(database, `users/${user.uid}`));
-        const hasName = snap.exists() && typeof snap.val()?.displayName === 'string' && String(snap.val()?.displayName).trim().length > 0;
+        const hasName =
+          snap.exists() &&
+          typeof snap.val()?.displayName === 'string' &&
+          String(snap.val()?.displayName).trim().length > 0;
         router.replace(hasName ? '/(tabs)' : '/onboarding/name');
       } catch {
         router.replace('/(tabs)');
@@ -47,8 +53,8 @@ export default function Index() {
   }, []);
 
   return (
-    <View className="flex-1 justify-center items-center bg-gray-900">
-      <Text className="text-white text-2xl font-bold mb-4">GameTime</Text>
+    <View className="flex-1 items-center justify-center bg-gray-900">
+      <Text className="mb-4 text-2xl font-bold text-white">GameTime</Text>
       <Text className="text-gray-400">Loading...</Text>
     </View>
   );

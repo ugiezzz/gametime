@@ -1,7 +1,7 @@
 const SKIP_COVERAGE = process.env.RUN_RIOT_INT_TESTS === '1';
 
 module.exports = {
-  preset: '@testing-library/react-native',
+  preset: 'react-native',
   moduleNameMapper: {
     // Handle module aliases (this will be automatically configured for you soon)
     '^@/(.*)$': '<rootDir>/src/$1',
@@ -21,13 +21,15 @@ module.exports = {
     '!**/babel.config.js',
     '!**/jest.setup.js',
   ],
-  coverageThreshold: SKIP_COVERAGE ? undefined : {
-    global: {
-      branches: 30,
-      functions: 30,
-      lines: 30,
-      statements: 30,
-    },
-  },
+  coverageThreshold: SKIP_COVERAGE
+    ? undefined
+    : {
+        global: {
+          branches: 30,
+          functions: 30,
+          lines: 30,
+          statements: 30,
+        },
+      },
   testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/.expo/'],
 };

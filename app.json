@@ -17,18 +17,27 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.gametime.app"
+      "bundleIdentifier": "com.gametimeapp.app",
+      "buildNumber": "7",
+      "infoPlist": {
+        "NSContactsUsageDescription": "GameTime uses your contacts to let you invite friends to groups.",
+        "NSCalendarsUsageDescription": "GameTime lets you pick times; calendar access may be used in future updates.",
+        "NSUserTrackingUsageDescription": "We do not track you across apps.",
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
-      "package": "com.gametime.app",
+      "package": "com.gametimeapp.app",
       "versionCode": 1,
       "permissions": [
         "READ_CONTACTS",
-        "POST_NOTIFICATIONS"
+        "POST_NOTIFICATIONS",
+        "android.permission.READ_CONTACTS",
+        "android.permission.WRITE_CONTACTS"
       ]
     },
     "web": {
@@ -45,22 +54,11 @@
         }
       ]
     ],
-    "ios": {
-      "supportsTablet": true,
-      "bundleIdentifier": "com.gametime.app",
-      "buildNumber": "1",
-      "infoPlist": {
-        "NSContactsUsageDescription": "GameTime uses your contacts to let you invite friends to groups.",
-        "NSCalendarsUsageDescription": "GameTime lets you pick times; calendar access may be used in future updates.",
-        "NSUserTrackingUsageDescription": "We do not track you across apps."
-      }
-    },
     "extra": {
       "router": {},
       "eas": {
         "projectId": "842750e2-95c1-46ec-bada-977be4ce08ea"
-      }
-      ,
+      },
       "RIOT_API_KEY": "RGAPI-a23c8c62-d570-433f-8278-8c04f6f16d29"
     }
   }

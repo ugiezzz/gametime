@@ -1,6 +1,7 @@
-import { auth, database, db } from '@/config/firebase';
-import { ref, set, get, remove } from 'firebase/database';
 import { signInAnonymously, signOut } from 'firebase/auth';
+import { get, ref, remove, set } from 'firebase/database';
+
+import { auth, database, db } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
 
@@ -16,7 +17,9 @@ describe('Firebase Configuration Tests', () => {
   });
 
   test('Database URL should be configured', () => {
-    expect(database.app.options.databaseURL).toBe('https://gametime-app-4e0e3-default-rtdb.firebaseio.com');
+    expect(database.app.options.databaseURL).toBe(
+      'https://gametime-app-4e0e3-default-rtdb.firebaseio.com',
+    );
   });
 });
 
@@ -24,7 +27,7 @@ describe('Firebase Realtime Database Tests', () => {
   const testData = {
     message: 'Test message from GameTime',
     timestamp: new Date().toISOString(),
-    testId: Math.random().toString(36).substr(2, 9)
+    testId: Math.random().toString(36).substr(2, 9),
   };
 
   afterEach(async () => {
@@ -39,36 +42,42 @@ describe('Firebase Realtime Database Tests', () => {
 
   test('Should write data to Realtime Database', async () => {
     const testRef = ref(database, `test/${testData.testId}`);
-    
+
     try {
       await set(testRef, testData);
       const snapshot = await get(testRef);
-      
+
       expect(snapshot.exists()).toBe(true);
       expect(snapshot.val()).toEqual(testData);
     } catch (error) {
       // If database is not enabled, this will fail
       expect(error).toBeDefined();
-      console.log('Database write test failed (expected if database not enabled):', error);
+      console.log(
+        'Database write test failed (expected if database not enabled):',
+        error,
+      );
     }
   });
 
   test('Should read data from Realtime Database', async () => {
     const testRef = ref(database, `test/${testData.testId}`);
-    
+
     try {
       // First write the data
       await set(testRef, testData);
-      
+
       // Then read it back
       const snapshot = await get(testRef);
-      
+
       expect(snapshot.exists()).toBe(true);
       expect(snapshot.val().message).toBe(testData.message);
       expect(snapshot.val().timestamp).toBe(testData.timestamp);
     } catch (error) {
       expect(error).toBeDefined();
-      console.log('Database read test failed (expected if database not enabled):', error);
+      console.log(
+        'Database read test failed (expected if database not enabled):',
+        error,
+      );
     }
   });
 });
@@ -79,7 +88,7 @@ describe('Firebase Authentication Tests', () => {
       const userCredential = await signInAnonymously(auth);
       expect(userCredential.user).toBeDefined();
       expect(userCredential.user.uid).toBeDefined();
-      
+
       // Clean up
       await signOut(auth);
     } catch (error) {
@@ -98,7 +107,9 @@ describe('Firebase Authentication Tests', () => {
   test('CustomAuthService should have correct functions URL', () => {
     // Access the private property for testing
     const functionsUrl = (CustomAuthService as any).functionsBaseUrl;
-    expect(functionsUrl).toBe('https://us-central1-gametime-app-4e0e3.cloudfunctions.net');
+    expect(functionsUrl).toBe(
+      'https://us-central1-gametime-app-4e0e3.cloudfunctions.net',
+    );
   });
 });
 
@@ -119,7 +130,7 @@ describe('Firebase Group Service Tests', () => {
 describe('Configuration Validation Tests', () => {
   test('Firebase config should have all required fields', () => {
     const config = auth.app.options;
-    
+
     expect(config.apiKey).toBe('AIzaSyCOVHqhturFgeo79MPcGDHiBTZD-ktPwDM');
     expect(config.authDomain).toBe('gametime-app-4e0e3.firebaseapp.com');
     expect(config.projectId).toBe('gametime-app-4e0e3');
@@ -138,7 +149,7 @@ describe('Configuration Validation Tests', () => {
 describe('Error Handling Tests', () => {
   test('Should handle database connection errors gracefully', async () => {
     const invalidRef = ref(database, 'invalid/path/that/should/fail');
-    
+
     try {
       await set(invalidRef, { test: 'data' });
       // If this succeeds, the database is working
@@ -149,4 +160,4 @@ describe('Error Handling Tests', () => {
       console.log('Database error handling test passed:', error);
     }
   });
-}); 
+});

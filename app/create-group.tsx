@@ -1,11 +1,19 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import * as Contacts from 'expo-contacts';
+import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+import { CustomAuthService } from '@/services/customAuthService';
 // Removed phoneUtil import - normalization now handled by FirebaseGroupService
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
-import { FirebaseAuthService } from '@/services/firebaseAuthService';
 
 interface Contact {
   id: string;
@@ -16,7 +24,7 @@ interface Contact {
 
 export default function CreateGroupScreen() {
   const [groupName, setGroupName] = useState('');
-  const [game] = useState<'League of Legends'>('League of Legends');
+  const [game] = useState<'League of Legends'>('League of Legends'); // Default game as per PRD
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filteredContacts, setFilteredContacts] = useState<Contact[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -29,8 +37,8 @@ export default function CreateGroupScreen() {
 
   useEffect(() => {
     // Filter contacts based on search query
-    const filtered = contacts.filter(contact =>
-      contact.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const filtered = contacts.filter((contact) =>
+      contact.name.toLowerCase().includes(searchQuery.toLowerCase()),
     );
     setFilteredContacts(filtered);
   }, [contacts, searchQuery]);
@@ -42,17 +50,23 @@ export default function CreateGroupScreen() {
         const { data } = await Contacts.getContactsAsync({
           fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
         });
-        
+
         const formattedContacts = data
-          .filter(contact => contact.name && contact.phoneNumbers?.length && contact.id)
-          .map(contact => ({
+          .filter(
+            (contact) =>
+              contact.name && contact.phoneNumbers?.length && contact.id,
+          )
+          .map((contact) => ({
             id: contact.id!,
             name: contact.name || 'Unknown',
-            phoneNumbers: contact.phoneNumbers?.map(p => p.number).filter((num): num is string => Boolean(num)) || [],
+            phoneNumbers:
+              contact.phoneNumbers
+                ?.map((p) => p.number)
+                .filter((num): num is string => Boolean(num)) || [],
             selected: false,
           }))
           .sort((a, b) => a.name.localeCompare(b.name)); // Sort alphabetically
-        
+
         setContacts(formattedContacts);
         setFilteredContacts(formattedContacts);
       } else {
@@ -66,12 +80,12 @@ export default function CreateGroupScreen() {
   };
 
   const toggleContactSelection = (contactId: string) => {
-    setContacts(prev => 
-      prev.map(contact => 
-        contact.id === contactId 
+    setContacts((prev) =>
+      prev.map((contact) =>
+        contact.id === contactId
           ? { ...contact, selected: !contact.selected }
-          : contact
-      )
+          : contact,
+      ),
     );
   };
 
@@ -81,14 +95,14 @@ export default function CreateGroupScreen() {
       return;
     }
 
-    const selectedContacts = contacts.filter(contact => contact.selected);
+    const selectedContacts = contacts.filter((contact) => contact.selected);
     if (selectedContacts.length === 0) {
       Alert.alert('Error', 'Please select at least one contact');
       return;
     }
 
     // Check if user is authenticated
-    if (!FirebaseAuthService.isAuthenticated()) {
+    if (!CustomAuthService.isAuthenticated()) {
       Alert.alert('Error', 'Please sign in to create groups');
       router.replace('/auth/phone');
       return;
@@ -98,7 +112,7 @@ export default function CreateGroupScreen() {
     try {
       // Don't normalize here - let FirebaseGroupService handle it with creator's region context
       // Just pass the raw phone numbers and let the service normalize them properly
-      const members = selectedContacts.map(contact => {
+      const members = selectedContacts.map((contact) => {
         const allNumbers = contact.phoneNumbers || [];
         const bestRawNumber = (allNumbers[0] || '').trim(); // Just take the first raw number
         return {
@@ -108,12 +122,15 @@ export default function CreateGroupScreen() {
         };
       });
 
-      await FirebaseGroupService.createGroup(groupName.trim(), members);
+      await FirebaseGroupService.createGroup(groupName.trim(), members, game);
       Alert.alert('Success', 'Group created successfully!');
       router.back();
     } catch (error) {
       console.error('Failed to create group:', error);
-      const message = error instanceof Error ? error.message : 'Failed to create group. Please try again.';
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Failed to create group. Please try again.';
       Alert.alert('Error', message);
     } finally {
       setCreating(false);
@@ -122,21 +139,21 @@ export default function CreateGroupScreen() {
 
   const renderContactItem = ({ item }: { item: Contact }) => (
     <TouchableOpacity
-      className={`p-4 border-b border-gray-700 flex-row items-center ${
+      className={`flex-row items-center border-b border-gray-700 p-4 ${
         item.selected ? 'bg-blue-900' : 'bg-gray-800'
       }`}
       onPress={() => toggleContactSelection(item.id)}
     >
-      <View className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${
-        item.selected ? 'bg-blue-600 border-blue-600' : 'border-gray-500'
-      }`}>
-        {item.selected && (
-          <Ionicons name="checkmark" size={16} color="white" />
-        )}
+      <View
+        className={`mr-3 size-6 items-center justify-center rounded-full border-2 ${
+          item.selected ? 'border-blue-600 bg-blue-600' : 'border-gray-500'
+        }`}
+      >
+        {item.selected && <Ionicons name="checkmark" size={16} color="white" />}
       </View>
       <View className="flex-1">
-        <Text className="text-white text-lg font-semibold">{item.name}</Text>
-        <Text className="text-gray-400 text-sm">
+        <Text className="text-lg font-semibold text-white">{item.name}</Text>
+        <Text className="text-sm text-gray-400">
           {item.phoneNumbers?.[0] || 'No phone number'}
         </Text>
       </View>
@@ -145,17 +162,17 @@ export default function CreateGroupScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-900">
-        <Text className="text-white text-lg">Loading contacts...</Text>
+      <View className="flex-1 items-center justify-center bg-gray-900">
+        <Text className="text-lg text-white">Loading contacts...</Text>
       </View>
     );
   }
 
   return (
     <View className="flex-1 bg-gray-900">
-      <View className="p-4 border-b border-gray-700">
+      <View className="border-b border-gray-700 p-4">
         <TextInput
-          className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg"
+          className="rounded-lg border border-gray-700 bg-gray-800 p-4 text-lg text-white"
           placeholder="Enter group name"
           placeholderTextColor="#9CA3AF"
           value={groupName}
@@ -164,25 +181,28 @@ export default function CreateGroupScreen() {
       </View>
 
       <View className="flex-1">
-        <View className="p-4 border-b border-gray-700">
-          <Text className="text-white text-lg font-semibold mb-3">Select Contacts</Text>
+        <View className="border-b border-gray-700 p-4">
+          <Text className="mb-3 text-lg font-semibold text-white">
+            Select Contacts
+          </Text>
           <View className="relative mb-2">
             <TextInput
-              className="bg-gray-800 text-white p-4 rounded-lg border border-gray-700 text-lg pl-10"
+              className="rounded-lg border border-gray-700 bg-gray-800 p-4 pl-10 text-lg text-white"
               placeholder="Search contacts..."
               placeholderTextColor="#9CA3AF"
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
-            <Ionicons 
-              name="search" 
-              size={20} 
-              color="#9CA3AF" 
+            <Ionicons
+              name="search"
+              size={20}
+              color="#9CA3AF"
               style={{ position: 'absolute', left: 12, top: 14 }}
             />
           </View>
-          <Text className="text-gray-400 text-sm">
-            {contacts.filter(c => c.selected).length} selected • {filteredContacts.length} contacts
+          <Text className="text-sm text-gray-400">
+            {contacts.filter((c) => c.selected).length} selected •{' '}
+            {filteredContacts.length} contacts
           </Text>
         </View>
 
@@ -194,17 +214,17 @@ export default function CreateGroupScreen() {
         />
       </View>
 
-      <View className="p-4 border-t border-gray-700">
+      <View className="border-t border-gray-700 p-4">
         <TouchableOpacity
-          className={`p-4 rounded-lg ${creating ? 'bg-gray-600' : 'bg-blue-600'}`}
+          className={`rounded-lg p-4 ${creating ? 'bg-gray-600' : 'bg-blue-600'}`}
           onPress={handleCreateGroup}
           disabled={creating}
         >
-          <Text className="text-white text-center font-bold text-lg">
+          <Text className="text-center text-lg font-bold text-white">
             {creating ? 'Creating...' : 'Create Group'}
           </Text>
         </TouchableOpacity>
       </View>
     </View>
   );
-} 
+}

@@ -1,5 +1,6 @@
 import * as Localization from 'expo-localization';
-import { parsePhoneNumberFromString, AsYouType, CountryCode } from 'libphonenumber-js';
+import type { CountryCode } from 'libphonenumber-js';
+import { AsYouType, parsePhoneNumberFromString } from 'libphonenumber-js';
 
 export type NormalizedPhone = {
   e164: string | null;
@@ -14,10 +15,20 @@ export function getDefaultRegion(): string {
   return region && /^[A-Z]{2}$/.test(region) ? region : 'US';
 }
 
-export function normalizePhoneNumber(input: string, region?: string): NormalizedPhone {
+export function normalizePhoneNumber(
+  input: string,
+  region?: string,
+): NormalizedPhone {
   try {
     const raw = (input || '').trim();
-    if (!raw) return { e164: null, region: region || getDefaultRegion(), national: null, isValid: false, error: 'empty' };
+    if (!raw)
+      return {
+        e164: null,
+        region: region || getDefaultRegion(),
+        national: null,
+        isValid: false,
+        error: 'empty',
+      };
 
     const hasPlus = raw.startsWith('+');
     const effectiveRegion = (region || getDefaultRegion()) as CountryCode;
@@ -27,7 +38,13 @@ export function normalizePhoneNumber(input: string, region?: string): Normalized
       : parsePhoneNumberFromString(raw, effectiveRegion);
 
     if (!parsed || !parsed.isValid()) {
-      return { e164: null, region: parsed?.country || effectiveRegion || null, national: null, isValid: false, error: 'invalid' };
+      return {
+        e164: null,
+        region: parsed?.country || effectiveRegion || null,
+        national: null,
+        isValid: false,
+        error: 'invalid',
+      };
     }
 
     return {
@@ -37,7 +54,13 @@ export function normalizePhoneNumber(input: string, region?: string): Normalized
       isValid: true,
     };
   } catch (e) {
-    return { e164: null, region: region || getDefaultRegion(), national: null, isValid: false, error: 'exception' };
+    return {
+      e164: null,
+      region: region || getDefaultRegion(),
+      national: null,
+      isValid: false,
+      error: 'exception',
+    };
   }
 }
 
@@ -51,5 +74,3 @@ export function formatExamplePlaceholder(region?: string): string {
   const out = formatter.getTemplate() || formatter.getNumberValue() || sample;
   return out.replace(/\d/g, (d) => d).trim();
 }
-
-

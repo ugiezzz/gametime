@@ -1,12 +1,26 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, Alert, TextInput, ActivityIndicator, Modal, ScrollView } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { CustomAuthService } from '@/services/customAuthService';
+import { router } from 'expo-router';
+import { get, onValue, ref } from 'firebase/database';
+import { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  ScrollView,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
 import { auth, database } from '@/config/firebase';
-import { ref, onValue, get } from 'firebase/database';
+import { CustomAuthService } from '@/services/customAuthService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
-import { resolveSummonerId, getSuperRegion, type SpecificRegion } from '@/services/riotService';
+import {
+  getSuperRegion,
+  resolveSummonerId,
+  type SpecificRegion,
+} from '@/services/riotService';
 
 export default function ProfileScreen() {
   const [displayName, setDisplayName] = useState<string | null>(null);
@@ -16,9 +30,27 @@ export default function ProfileScreen() {
   const [nameInput, setNameInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [riotIdInput, setRiotIdInput] = useState('');
-  const [riotRegionInput, setRiotRegionInput] = useState<SpecificRegion>('EUN1');
+  const [riotRegionInput, setRiotRegionInput] =
+    useState<SpecificRegion>('EUN1');
   const [regionPickerVisible, setRegionPickerVisible] = useState(false);
-  const regions: SpecificRegion[] = ['BR1','EUN1','EUW1','JP1','KR','LA1','LA2','NA1','OC1','TR1','RU','PH2','SG2','TH2','TW2','VN2'];
+  const regions: SpecificRegion[] = [
+    'BR1',
+    'EUN1',
+    'EUW1',
+    'JP1',
+    'KR',
+    'LA1',
+    'LA2',
+    'NA1',
+    'OC1',
+    'TR1',
+    'RU',
+    'PH2',
+    'SG2',
+    'TH2',
+    'TW2',
+    'VN2',
+  ];
 
   useEffect(() => {
     const user = auth.currentUser;
@@ -27,13 +59,22 @@ export default function ProfileScreen() {
     const userRef = ref(database, `users/${user.uid}`);
     const unsubscribe = onValue(userRef, (snapshot) => {
       if (snapshot.exists()) {
-        const val = snapshot.val() as { displayName?: string; phoneNumber?: string; riotGameName?: string; riotTagLine?: string; riotRegion?: SpecificRegion };
+        const val = snapshot.val() as {
+          displayName?: string;
+          phoneNumber?: string;
+          riotGameName?: string;
+          riotTagLine?: string;
+          riotRegion?: SpecificRegion;
+        };
         setDisplayName(val.displayName || null);
         setPhoneNumber(val.phoneNumber || null);
         if (!editing) setNameInput(val.displayName || '');
-        const riot = [val.riotGameName, val.riotTagLine].filter(Boolean).join('#');
+        const riot = [val.riotGameName, val.riotTagLine]
+          .filter(Boolean)
+          .join('#');
         setRiotIdInput(riot || '');
-        if (val.riotRegion) setRiotRegionInput(val.riotRegion as SpecificRegion);
+        if (val.riotRegion)
+          setRiotRegionInput(val.riotRegion as SpecificRegion);
       }
     });
 
@@ -41,27 +82,23 @@ export default function ProfileScreen() {
   }, []);
 
   const handleLogout = () => {
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
+    Alert.alert('Logout', 'Are you sure you want to logout?', [
+      {
+        text: 'Cancel',
+        style: 'cancel',
+      },
+      {
+        text: 'Logout',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await CustomAuthService.signOut();
+          } finally {
+            router.replace('/auth/phone');
+          }
         },
-        {
-          text: 'Logout',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await CustomAuthService.signOut();
-            } finally {
-              router.replace('/auth/phone');
-            }
-          },
-        },
-      ]
-    );
+      },
+    ]);
   };
 
   const isOwner = phoneNumber === '+972502525177';
@@ -102,7 +139,10 @@ export default function ProfileScreen() {
     }
     try {
       setSaving(true);
-      const { puuid, summonerId } = await resolveSummonerId(id, riotRegionInput);
+      const { puuid, summonerId } = await resolveSummonerId(
+        id,
+        riotRegionInput,
+      );
       const gameName = id.slice(0, idx);
       const tagLine = id.slice(idx + 1);
       const riotSuperRegion = getSuperRegion(riotRegionInput);
@@ -126,7 +166,10 @@ export default function ProfileScreen() {
   const runCreateDeleteGroupTest = async () => {
     try {
       setDebugOutput('Starting create/delete group test...');
-      const group = await FirebaseGroupService.createGroup('Temp Delete Test', []);
+      const group = await FirebaseGroupService.createGroup(
+        'Temp Delete Test',
+        [],
+      );
       setDebugOutput(`Created group ${group.id}, deleting...`);
       await FirebaseGroupService.deleteGroup(group.id);
       setDebugOutput(`Success: Group ${group.id} deleted and indexes cleaned.`);
@@ -145,7 +188,9 @@ export default function ProfileScreen() {
       // Read user's index first to avoid permission errors on groups root
       const idxSnap = await get(ref(database, `userGroups/${me}`));
       if (!idxSnap.exists()) {
-        setDebugOutput('No userGroups index for current user. Create a group or wait for indexer.');
+        setDebugOutput(
+          'No userGroups index for current user. Create a group or wait for indexer.',
+        );
         return;
       }
       const groupIds: string[] = Object.keys(idxSnap.val() || {});
@@ -154,7 +199,9 @@ export default function ProfileScreen() {
         const groupSnap = await get(ref(database, `groups/${gid}`));
         if (!groupSnap.exists()) continue;
         const group = groupSnap.val();
-        const membersByUid = group.membersByUid ? Object.keys(group.membersByUid) : [];
+        const membersByUid = group.membersByUid
+          ? Object.keys(group.membersByUid)
+          : [];
         const hasMe = me ? membersByUid.includes(me) : false;
         const hasIndex = true; // we already read from userGroups/{me}
         lines.push(`${gid} • member=${hasMe} • userGroupsIndex=${hasIndex}`);
@@ -172,53 +219,72 @@ export default function ProfileScreen() {
       keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
-      <View className="bg-gray-800 rounded-lg p-6 mb-6">
-        <View className="items-center mb-2">
-          <Text className="text-white text-xl font-bold">{displayName || phoneNumber || '—'}</Text>
-          <Text className="text-gray-400 mt-1">{phoneNumber || '—'}</Text>
+      <View className="mb-6 rounded-lg bg-gray-800 p-6">
+        <View className="mb-2 items-center">
+          <Text className="text-xl font-bold text-white">
+            {displayName || phoneNumber || '—'}
+          </Text>
+          <Text className="mt-1 text-gray-400">{phoneNumber || '—'}</Text>
         </View>
         {!editing ? (
-          <TouchableOpacity className="mt-3 self-center bg-blue-600 px-4 py-2 rounded" onPress={startEdit}>
-            <Text className="text-white font-semibold">Edit name</Text>
+          <TouchableOpacity
+            className="mt-3 self-center rounded bg-blue-600 px-4 py-2"
+            onPress={startEdit}
+          >
+            <Text className="font-semibold text-white">Edit name</Text>
           </TouchableOpacity>
         ) : (
           <View className="mt-4">
-            <Text className="text-gray-300 mb-2">Display name</Text>
+            <Text className="mb-2 text-gray-300">Display name</Text>
             <TextInput
-              className="bg-gray-900 text-white p-3 rounded border border-gray-700"
+              className="rounded border border-gray-700 bg-gray-900 p-3 text-white"
               placeholder="Your name"
               placeholderTextColor="#9CA3AF"
               value={nameInput}
               onChangeText={setNameInput}
               editable={!saving}
             />
-            <View className="flex-row mt-3">
-              <TouchableOpacity className="bg-gray-700 px-4 py-2 rounded mr-3" onPress={cancelEdit} disabled={saving}>
+            <View className="mt-3 flex-row">
+              <TouchableOpacity
+                className="mr-3 rounded bg-gray-700 px-4 py-2"
+                onPress={cancelEdit}
+                disabled={saving}
+              >
                 <Text className="text-white">Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity className="bg-green-600 px-4 py-2 rounded flex-row items-center" onPress={saveName} disabled={saving}>
-                {saving && <ActivityIndicator size="small" color="#fff" className="mr-2" />}
-                <Text className="text-white font-semibold">Save</Text>
+              <TouchableOpacity
+                className="flex-row items-center rounded bg-green-600 px-4 py-2"
+                onPress={saveName}
+                disabled={saving}
+              >
+                {saving && (
+                  <ActivityIndicator
+                    size="small"
+                    color="#fff"
+                    className="mr-2"
+                  />
+                )}
+                <Text className="font-semibold text-white">Save</Text>
               </TouchableOpacity>
             </View>
           </View>
         )}
       </View>
 
-      <View className="bg-gray-800 rounded-lg p-4 mb-6">
-        <Text className="text-white text-lg font-bold mb-4">Riot settings</Text>
-        <Text className="text-gray-300 mb-2">Riot ID (gameName#tagLine)</Text>
+      <View className="mb-6 rounded-lg bg-gray-800 p-4">
+        <Text className="mb-4 text-lg font-bold text-white">Riot settings</Text>
+        <Text className="mb-2 text-gray-300">Riot ID (gameName#tagLine)</Text>
         <TextInput
-          className="bg-gray-900 text-white p-3 rounded border border-gray-700 mb-3"
+          className="mb-3 rounded border border-gray-700 bg-gray-900 p-3 text-white"
           placeholder="e.g., Faker#KR1"
           placeholderTextColor="#9CA3AF"
           value={riotIdInput}
           onChangeText={setRiotIdInput}
           editable={!saving}
         />
-        <Text className="text-gray-300 mb-2">Region</Text>
+        <Text className="mb-2 text-gray-300">Region</Text>
         <TouchableOpacity
-          className="bg-gray-900 border border-gray-700 rounded px-3 py-3 mb-3"
+          className="mb-3 rounded border border-gray-700 bg-gray-900 p-3"
           onPress={() => setRegionPickerVisible(true)}
           disabled={saving}
         >
@@ -231,82 +297,110 @@ export default function ProfileScreen() {
           onRequestClose={() => setRegionPickerVisible(false)}
         >
           <View className="flex-1 justify-end bg-black/50">
-            <View className="bg-gray-800 rounded-t-xl p-4">
-              <Text className="text-white text-lg font-bold mb-3">Select Region</Text>
+            <View className="rounded-t-xl bg-gray-800 p-4">
+              <Text className="mb-3 text-lg font-bold text-white">
+                Select Region
+              </Text>
               <ScrollView className="mb-3" style={{ maxHeight: '60%' }}>
                 {regions.map((r) => (
                   <TouchableOpacity
                     key={r}
-                    className={`flex-row items-center justify-between px-3 py-3 rounded mb-2 ${riotRegionInput === r ? 'bg-blue-600' : 'bg-gray-700'}`}
+                    className={`mb-2 flex-row items-center justify-between rounded p-3 ${riotRegionInput === r ? 'bg-blue-600' : 'bg-gray-700'}`}
                     onPress={() => {
                       setRiotRegionInput(r);
                       setRegionPickerVisible(false);
                     }}
                   >
-                    <Text className="text-white text-base">{r}</Text>
-                    {riotRegionInput === r && <Ionicons name="checkmark" size={18} color="#fff" />}
+                    <Text className="text-base text-white">{r}</Text>
+                    {riotRegionInput === r && (
+                      <Ionicons name="checkmark" size={18} color="#fff" />
+                    )}
                   </TouchableOpacity>
                 ))}
               </ScrollView>
               <TouchableOpacity
-                className="bg-gray-700 px-4 py-3 rounded"
+                className="rounded bg-gray-700 px-4 py-3"
                 onPress={() => setRegionPickerVisible(false)}
               >
-                <Text className="text-white text-center font-semibold">Close</Text>
+                <Text className="text-center font-semibold text-white">
+                  Close
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
         </Modal>
-        <TouchableOpacity className={`px-4 py-2 rounded ${saving ? 'bg-gray-600' : 'bg-green-600'}`} onPress={saveRiotProfile} disabled={saving}>
-          <Text className="text-white font-semibold">Save Riot Profile</Text>
+        <TouchableOpacity
+          className={`rounded px-4 py-2 ${saving ? 'bg-gray-600' : 'bg-green-600'}`}
+          onPress={saveRiotProfile}
+          disabled={saving}
+        >
+          <Text className="font-semibold text-white">Save Riot Profile</Text>
         </TouchableOpacity>
       </View>
 
-      <View className="bg-gray-800 rounded-lg p-4 mb-6">
-        <Text className="text-white text-lg font-bold mb-4">App settings</Text>
-        <TouchableOpacity className="flex-row items-center py-3 border-b border-gray-700">
+      <View className="mb-6 rounded-lg bg-gray-800 p-4">
+        <Text className="mb-4 text-lg font-bold text-white">App settings</Text>
+        <TouchableOpacity className="flex-row items-center border-b border-gray-700 py-3">
           <Ionicons name="notifications-outline" size={20} color="#9CA3AF" />
-          <Text className="text-white ml-3 flex-1">Notifications</Text>
+          <Text className="ml-3 flex-1 text-white">Notifications</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
-        
-        <TouchableOpacity className="flex-row items-center py-3 border-b border-gray-700">
+
+        <TouchableOpacity className="flex-row items-center border-b border-gray-700 py-3">
           <Ionicons name="people-outline" size={20} color="#9CA3AF" />
-          <Text className="text-white ml-3 flex-1">Contacts</Text>
+          <Text className="ml-3 flex-1 text-white">Contacts</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
-        
+
         <TouchableOpacity className="flex-row items-center py-3">
-          <Ionicons name="information-circle-outline" size={20} color="#9CA3AF" />
-          <Text className="text-white ml-3 flex-1">About</Text>
+          <Ionicons
+            name="information-circle-outline"
+            size={20}
+            color="#9CA3AF"
+          />
+          <Text className="ml-3 flex-1 text-white">About</Text>
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
 
       {isOwner && (
-        <View className="bg-gray-800 rounded-lg p-4 mb-6">
-          <Text className="text-white text-lg font-bold mb-3">Test scripts</Text>
-          <TouchableOpacity className="bg-blue-600 p-3 rounded mb-3" onPress={runMembershipDiagnostics}>
-            <Text className="text-white text-center font-semibold">Membership index diagnostics</Text>
+        <View className="mb-6 rounded-lg bg-gray-800 p-4">
+          <Text className="mb-3 text-lg font-bold text-white">
+            Test scripts
+          </Text>
+          <TouchableOpacity
+            className="mb-3 rounded bg-blue-600 p-3"
+            onPress={runMembershipDiagnostics}
+          >
+            <Text className="text-center font-semibold text-white">
+              Membership index diagnostics
+            </Text>
           </TouchableOpacity>
-          <TouchableOpacity className="bg-gray-700 p-3 rounded mb-3" onPress={runCreateDeleteGroupTest}>
-            <Text className="text-white text-center font-semibold">Create & delete temp group</Text>
+          <TouchableOpacity
+            className="mb-3 rounded bg-gray-700 p-3"
+            onPress={runCreateDeleteGroupTest}
+          >
+            <Text className="text-center font-semibold text-white">
+              Create & delete temp group
+            </Text>
           </TouchableOpacity>
           {!!debugOutput && (
-            <View className="bg-gray-900 p-3 rounded">
-              <Text className="text-gray-300 text-xs" selectable>{debugOutput}</Text>
+            <View className="rounded bg-gray-900 p-3">
+              <Text className="text-xs text-gray-300" selectable>
+                {debugOutput}
+              </Text>
             </View>
           )}
         </View>
       )}
 
       <TouchableOpacity
-        className="bg-red-600 p-4 rounded-lg flex-row items-center justify-center"
+        className="flex-row items-center justify-center rounded-lg bg-red-600 p-4"
         onPress={handleLogout}
       >
         <Ionicons name="log-out-outline" size={20} color="white" />
-        <Text className="text-white font-bold ml-2">Logout</Text>
+        <Text className="ml-2 font-bold text-white">Logout</Text>
       </TouchableOpacity>
     </ScrollView>
   );
-} 
+}

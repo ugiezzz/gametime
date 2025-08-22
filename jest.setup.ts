@@ -1,2 +1,1 @@
-// Import Jest Native matchers
-import '@testing-library/jest-native/extend-expect';
+// Jest setup - no additional matchers needed for basic tests

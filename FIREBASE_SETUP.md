@@ -19,7 +19,7 @@
 
 1. **Add Android App**
    - Click "Android" icon
-   - **Package name**: `com.gametime.app`
+   - **Package name**: `com.gametimeapp.app`
    - **App nickname**: `GameTime`
    - **Debug signing certificate**: (optional for now)
    - Click "Register app"
@@ -30,7 +30,7 @@
 
 3. **Add iOS App** (if needed)
    - Click "iOS" icon
-   - **Bundle ID**: `com.gametime.app`
+   - **Bundle ID**: `com.gametimeapp.app`
    - **App nickname**: `GameTime`
    - Download `GoogleService-Info.plist`
 

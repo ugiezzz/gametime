@@ -1,17 +1,21 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, Alert } from 'react-native';
-import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { FirebaseGroupService, Group } from '@/services/firebaseGroupService';
-import { database } from '@/config/firebase';
-import { ref, get } from 'firebase/database';
-import { FirebaseAuthService } from '@/services/firebaseAuthService';
 import { useFocusEffect } from '@react-navigation/native';
+import { router } from 'expo-router';
+import { get, ref } from 'firebase/database';
+import { useCallback, useEffect, useState } from 'react';
+import { Alert, FlatList, Text, TouchableOpacity, View } from 'react-native';
+
+import { database } from '@/config/firebase';
+import { CustomAuthService } from '@/services/customAuthService';
+import type { Group } from '@/services/firebaseGroupService';
+import { FirebaseGroupService } from '@/services/firebaseGroupService';
 
 export default function GroupsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
   const [loading, setLoading] = useState(true);
-  const [groupIdToNames, setGroupIdToNames] = useState<Record<string, string[]>>({});
+  const [groupIdToNames, setGroupIdToNames] = useState<
+    Record<string, string[]>
+  >({});
 
   useEffect(() => {
     loadGroups();
@@ -25,7 +29,9 @@ export default function GroupsScreen() {
         groups.map(async (g) => {
           // Prefer legacy display list if present
           const legacyNames = Array.isArray((g as any).members)
-            ? ((g as any).members as any[]).map((m: any) => m?.name).filter(Boolean)
+            ? ((g as any).members as any[])
+                .map((m: any) => m?.name)
+                .filter(Boolean)
             : [];
           if (legacyNames.length > 0) {
             mapping[g.id] = legacyNames as string[];
@@ -48,10 +54,10 @@ export default function GroupsScreen() {
               } catch {
                 // ignore best-effort
               }
-            })
+            }),
           );
           mapping[g.id] = names;
-        })
+        }),
       );
       setGroupIdToNames(mapping);
     };
@@ -63,13 +69,13 @@ export default function GroupsScreen() {
     useCallback(() => {
       loadGroups();
       return () => {};
-    }, [])
+    }, []),
   );
 
   const loadGroups = async () => {
     try {
       // Check if user is authenticated
-      if (!FirebaseAuthService.isAuthenticated()) {
+      if (!CustomAuthService.isAuthenticated()) {
         console.log('User not authenticated, redirecting to auth');
         router.replace('/auth/phone');
         return;
@@ -95,7 +101,7 @@ export default function GroupsScreen() {
 
   const formatLastPing = (date: Date | undefined) => {
     if (!date) return 'Never';
-    
+
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / (1000 * 60));
@@ -112,23 +118,31 @@ export default function GroupsScreen() {
     const memberCount = item.membersByUid
       ? Object.keys(item.membersByUid).length
       : Array.isArray((item as any).members)
-      ? ((item as any).members as any[]).length
-      : 0;
+        ? ((item as any).members as any[]).length
+        : 0;
     const names = groupIdToNames[item.id] || [];
     return (
       <TouchableOpacity
-        className="bg-gray-800 p-4 rounded-lg mb-3 mx-4"
+        className="mx-4 mb-3 rounded-lg bg-gray-800 p-4"
         onPress={() => handleGroupPress(item.id)}
       >
-        <View className="flex-row justify-between items-center">
+        <View className="flex-row items-center justify-between">
           <View className="flex-1">
-            <Text className="text-white text-lg font-bold">{item.name}</Text>
-            <Text className="text-gray-400 text-sm" numberOfLines={1} ellipsizeMode="tail">
-              {names.length > 0 ? names.join(', ') : `${memberCount} member${memberCount === 1 ? '' : 's'}`}
+            <Text className="text-lg font-bold text-white">{item.name}</Text>
+            <Text
+              className="text-sm text-gray-400"
+              numberOfLines={1}
+              ellipsizeMode="tail"
+            >
+              {names.length > 0
+                ? names.join(', ')
+                : `${memberCount} member${memberCount === 1 ? '' : 's'}`}
             </Text>
           </View>
           <View className="items-end">
-            <Text className="text-gray-400 text-sm">{formatLastPing(item.lastPing)}</Text>
+            <Text className="text-sm text-gray-400">
+              {formatLastPing(item.lastPing)}
+            </Text>
             <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
           </View>
         </View>
@@ -138,20 +152,24 @@ export default function GroupsScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 justify-center items-center bg-gray-900 px-6">
-        <Text className="text-white text-lg mb-6">Loading groups...</Text>
+      <View className="flex-1 items-center justify-center bg-gray-900 px-6">
+        <Text className="mb-6 text-lg text-white">Loading groups...</Text>
         <View className="w-full">
           <TouchableOpacity
-            className="bg-blue-600 p-4 rounded-lg mb-3"
+            className="mb-3 rounded-lg bg-blue-600 p-4"
             onPress={handleCreateGroup}
           >
-            <Text className="text-white text-center font-bold">Create Group</Text>
+            <Text className="text-center font-bold text-white">
+              Create Group
+            </Text>
           </TouchableOpacity>
           <TouchableOpacity
-            className="bg-gray-700 p-4 rounded-lg"
+            className="rounded-lg bg-gray-700 p-4"
             onPress={loadGroups}
           >
-            <Text className="text-white text-center font-bold">Retry Loading</Text>
+            <Text className="text-center font-bold text-white">
+              Retry Loading
+            </Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -161,30 +179,32 @@ export default function GroupsScreen() {
   return (
     <View className="flex-1 bg-gray-900">
       {groups.length === 0 ? (
-        <View className="flex-1 justify-center items-center px-6">
+        <View className="flex-1 items-center justify-center px-6">
           <Ionicons name="people-outline" size={64} color="#9CA3AF" />
-          <Text className="text-white text-xl font-bold mt-4 mb-2">
+          <Text className="mb-2 mt-4 text-xl font-bold text-white">
             No Groups Yet
           </Text>
-          <Text className="text-gray-400 text-center mb-8">
+          <Text className="mb-8 text-center text-gray-400">
             Create your first group to start pinging friends for games
           </Text>
           <TouchableOpacity
-            className="bg-blue-600 px-6 py-3 rounded-lg"
+            className="rounded-lg bg-blue-600 px-6 py-3"
             onPress={handleCreateGroup}
           >
-            <Text className="text-white font-bold">Create Group</Text>
+            <Text className="font-bold text-white">Create Group</Text>
           </TouchableOpacity>
         </View>
       ) : (
         <>
           <View className="p-4">
             <TouchableOpacity
-              className="bg-blue-600 p-3 rounded-lg flex-row items-center justify-center"
+              className="flex-row items-center justify-center rounded-lg bg-blue-600 p-3"
               onPress={handleCreateGroup}
             >
               <Ionicons name="add" size={20} color="white" />
-              <Text className="text-white font-bold ml-2">Create New Group</Text>
+              <Text className="ml-2 font-bold text-white">
+                Create New Group
+              </Text>
             </TouchableOpacity>
           </View>
           <FlatList
@@ -199,4 +219,4 @@ export default function GroupsScreen() {
       )}
     </View>
   );
-} 
+}

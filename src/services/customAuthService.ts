@@ -1,8 +1,11 @@
+import type { User } from 'firebase/auth';
+import { onAuthStateChanged, signOut as firebaseSignOut } from 'firebase/auth';
+
 import { auth, signInWithCustomToken } from '@/config/firebase';
-import { User, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
 
 export class CustomAuthService {
-  private static functionsBaseUrl = 'https://us-central1-gametime-app-4e0e3.cloudfunctions.net';
+  private static functionsBaseUrl =
+    'https://us-central1-gametime-app-4e0e3.cloudfunctions.net';
 
   // Send OTP to phone number
   static async sendOTP(phoneNumber: string): Promise<string> {
@@ -97,4 +100,4 @@ export class CustomAuthService {
   static isAuthenticated(): boolean {
     return auth.currentUser !== null;
   }
-} 
+}

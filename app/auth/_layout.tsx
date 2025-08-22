@@ -14,4 +14,4 @@ export default function AuthLayout() {
       <Stack.Screen name="otp" />
     </Stack>
   );
-} 
+}

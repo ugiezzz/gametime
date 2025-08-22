@@ -45,11 +45,13 @@ console.log('\n📱 TO TEST NOW:');
 console.log('1. Open the app on your phone/emulator');
 console.log('2. Go to the phone input screen');
 console.log('3. Enter your phone number');
-console.log('4. Check if you get an error (expected without deployed functions)');
+console.log(
+  '4. Check if you get an error (expected without deployed functions)',
+);
 
 console.log('\n🚀 NEXT STEPS:');
 console.log('1. Install Firebase CLI: npm install -g firebase-tools');
 console.log('2. Deploy functions: firebase deploy --only functions');
 console.log('3. Test complete OTP flow');
 
-console.log('\n💡 The app should be running now! Check your device.'); 
+console.log('\n💡 The app should be running now! Check your device.');

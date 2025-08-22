@@ -1,4 +1,8 @@
-import { configureRiotService, resolveSummonerId, getActiveGameStatus } from '@/services/riotService';
+import {
+  configureRiotService,
+  getActiveGameStatus,
+  resolveSummonerId,
+} from '@/services/riotService';
 
 // This is an integration-style test that calls Riot APIs. Guard with env var.
 const RUN_INTEGRATION = process.env.RUN_RIOT_INT_TESTS === '1';
@@ -8,6 +12,7 @@ describe('Riot Service integration', () => {
     it('skipped (set RUN_RIOT_INT_TESTS=1 to run)', () => {
       expect(true).toBe(true);
     });
+
     return;
   }
 
@@ -38,5 +43,3 @@ describe('Riot Service integration', () => {
     }
   });
 });
-
-

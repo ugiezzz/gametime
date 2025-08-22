@@ -1,6 +1,20 @@
 export type SpecificRegion =
-  | 'BR1' | 'EUN1' | 'EUW1' | 'JP1' | 'KR' | 'LA1' | 'LA2' | 'NA1'
-  | 'OC1' | 'TR1' | 'RU' | 'PH2' | 'SG2' | 'TH2' | 'TW2' | 'VN2';
+  | 'BR1'
+  | 'EUN1'
+  | 'EUW1'
+  | 'JP1'
+  | 'KR'
+  | 'LA1'
+  | 'LA2'
+  | 'NA1'
+  | 'OC1'
+  | 'TR1'
+  | 'RU'
+  | 'PH2'
+  | 'SG2'
+  | 'TH2'
+  | 'TW2'
+  | 'VN2';
 
 export type SuperRegion = 'americas' | 'europe' | 'asia' | 'sea';
 
@@ -37,7 +51,9 @@ export function getSuperRegion(from: SpecificRegion): SuperRegion {
   return REGION_TO_SUPER[from];
 }
 
-export function parseRiotId(riotId: string): { gameName: string; tagLine: string } | null {
+export function parseRiotId(
+  riotId: string,
+): { gameName: string; tagLine: string } | null {
   const idx = riotId.indexOf('#');
   if (idx <= 0 || idx === riotId.length - 1) return null;
   const gameName = riotId.slice(0, idx).trim();
@@ -48,7 +64,9 @@ export function parseRiotId(riotId: string): { gameName: string; tagLine: string
 
 async function fetchJson(url: string) {
   if (!config?.apiKey) throw new Error('Riot API key is not configured');
-  const resp = await fetch(url, { headers: { 'X-Riot-Token': config.apiKey } as any });
+  const resp = await fetch(url, {
+    headers: { 'X-Riot-Token': config.apiKey } as any,
+  });
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
     throw new Error(`HTTP ${resp.status}: ${text || 'Request failed'}`);
@@ -56,9 +74,13 @@ async function fetchJson(url: string) {
   return resp.json();
 }
 
-export async function resolveSummonerId(riotId: string, region: SpecificRegion): Promise<{ puuid: string; summonerId: string }> {
+export async function resolveSummonerId(
+  riotId: string,
+  region: SpecificRegion,
+): Promise<{ puuid: string; summonerId: string }> {
   const parsed = parseRiotId(riotId);
-  if (!parsed) throw new Error('Invalid Riot ID format. Expected gameName#tagLine');
+  if (!parsed)
+    throw new Error('Invalid Riot ID format. Expected gameName#tagLine');
   const { gameName, tagLine } = parsed;
   const superRegion = getSuperRegion(region);
   const hostSuper = String(superRegion).toLowerCase();
@@ -70,24 +92,31 @@ export async function resolveSummonerId(riotId: string, region: SpecificRegion):
   // Resolve by PUUID (preferred). Note: some keys may mask id; return empty if unavailable.
   const summonerByPuuidUrl = `https://${hostRegion}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${encodeURIComponent(puuid)}`;
   const summByPuuid = await fetchJson(summonerByPuuidUrl);
-  const summonerId = typeof summByPuuid?.id === 'string' ? String(summByPuuid.id) : '';
+  const summonerId =
+    typeof summByPuuid?.id === 'string' ? String(summByPuuid.id) : '';
   return { puuid, summonerId };
 }
 
-export async function getActiveGameStatus(puuid: string, region: SpecificRegion): Promise<{ inGame: boolean; elapsedMinutes?: number }> {
+export async function getActiveGameStatus(
+  puuid: string,
+  region: SpecificRegion,
+): Promise<{ inGame: boolean; elapsedMinutes?: number }> {
   if (!config?.apiKey) throw new Error('Riot API key is not configured');
   const hostRegion = String(region).toLowerCase();
   const url = `https://${hostRegion}.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/${encodeURIComponent(puuid)}`;
-  const resp = await fetch(url, { headers: { 'X-Riot-Token': config.apiKey } as any });
+  const resp = await fetch(url, {
+    headers: { 'X-Riot-Token': config.apiKey } as any,
+  });
   if (resp.status === 404) return { inGame: false };
   if (!resp.ok) {
     const text = await resp.text().catch(() => '');
-    throw new Error(`HTTP ${resp.status}: ${text || 'Spectator request failed'}`);
+    throw new Error(
+      `HTTP ${resp.status}: ${text || 'Spectator request failed'}`,
+    );
   }
   const data = await resp.json();
-  const start = typeof data.gameStartTime === 'number' ? data.gameStartTime : Date.now();
+  const start =
+    typeof data.gameStartTime === 'number' ? data.gameStartTime : Date.now();
   const elapsedMinutes = Math.round((Date.now() - start) / 60000);
   return { inGame: true, elapsedMinutes };
 }
-
-

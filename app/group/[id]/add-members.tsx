@@ -1,9 +1,17 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, FlatList, Alert } from 'react-native';
-import { useLocalSearchParams, router, Stack } from 'expo-router';
 import * as Contacts from 'expo-contacts';
-import { normalizePhoneNumber, getDefaultRegion } from '@/services/phoneUtil';
+import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useEffect, useState } from 'react';
+import {
+  Alert,
+  FlatList,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { getDefaultRegion, normalizePhoneNumber } from '@/services/phoneUtil';
 
 type Contact = {
   id: string;
@@ -13,7 +21,10 @@ type Contact = {
 };
 
 export default function AddMembersScreen() {
-  const { id: groupId, groupName } = useLocalSearchParams<{ id: string; groupName?: string }>();
+  const { id: groupId, groupName } = useLocalSearchParams<{
+    id: string;
+    groupName?: string;
+  }>();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [filtered, setFiltered] = useState<Contact[]>([]);
   const [query, setQuery] = useState('');
@@ -25,7 +36,7 @@ export default function AddMembersScreen() {
 
   useEffect(() => {
     const q = query.toLowerCase();
-    setFiltered(contacts.filter(c => c.name.toLowerCase().includes(q)));
+    setFiltered(contacts.filter((c) => c.name.toLowerCase().includes(q)));
   }, [contacts, query]);
 
   const loadContacts = async () => {
@@ -35,10 +46,19 @@ export default function AddMembersScreen() {
         Alert.alert('Permission denied', 'Cannot access contacts.');
         return;
       }
-      const { data } = await Contacts.getContactsAsync({ fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers] });
+      const { data } = await Contacts.getContactsAsync({
+        fields: [Contacts.Fields.Name, Contacts.Fields.PhoneNumbers],
+      });
       const list = data
-        .filter(c => c.name && c.phoneNumbers?.length && c.id)
-        .map(c => ({ id: c.id!, name: c.name || 'Unknown', phoneNumbers: (c.phoneNumbers || []).map(p => p.number!).filter(Boolean), selected: false }))
+        .filter((c) => c.name && c.phoneNumbers?.length && c.id)
+        .map((c) => ({
+          id: c.id!,
+          name: c.name || 'Unknown',
+          phoneNumbers: (c.phoneNumbers || [])
+            .map((p) => p.number!)
+            .filter(Boolean),
+          selected: false,
+        }))
         .sort((a, b) => a.name.localeCompare(b.name));
       setContacts(list);
       setFiltered(list);
@@ -48,7 +68,9 @@ export default function AddMembersScreen() {
   };
 
   const toggle = (id: string) => {
-    setContacts(prev => prev.map(c => (c.id === id ? { ...c, selected: !c.selected } : c)));
+    setContacts((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, selected: !c.selected } : c)),
+    );
   };
 
   const normalize = (raw?: string) => {
@@ -60,7 +82,7 @@ export default function AddMembersScreen() {
   const onSave = async () => {
     try {
       setSaving(true);
-      const selected = contacts.filter(c => c.selected);
+      const selected = contacts.filter((c) => c.selected);
       if (!selected.length) {
         Alert.alert('Select at least one contact');
         return;
@@ -68,7 +90,10 @@ export default function AddMembersScreen() {
       for (const c of selected) {
         const phone = normalize(c.phoneNumbers?.[0]);
         if (phone) {
-          await FirebaseGroupService.inviteMemberByPhone(String(groupId), phone);
+          await FirebaseGroupService.inviteMemberByPhone(
+            String(groupId),
+            phone,
+          );
         }
       }
       router.back();
@@ -80,32 +105,52 @@ export default function AddMembersScreen() {
   };
 
   const renderItem = ({ item }: { item: Contact }) => (
-    <TouchableOpacity onPress={() => toggle(item.id)} className={`p-4 border-b border-gray-700 flex-row items-center ${item.selected ? 'bg-blue-900' : 'bg-gray-800'}`}>
-      <View className={`w-6 h-6 rounded-full border-2 mr-3 items-center justify-center ${item.selected ? 'bg-blue-600 border-blue-600' : 'border-gray-500'}`}> 
-      </View>
+    <TouchableOpacity
+      onPress={() => toggle(item.id)}
+      className={`flex-row items-center border-b border-gray-700 p-4 ${item.selected ? 'bg-blue-900' : 'bg-gray-800'}`}
+    >
+      <View
+        className={`mr-3 size-6 items-center justify-center rounded-full border-2 ${item.selected ? 'border-blue-600 bg-blue-600' : 'border-gray-500'}`}
+      />
       <View className="flex-1">
-        <Text className="text-white text-lg font-semibold">{item.name}</Text>
-        <Text className="text-gray-400 text-sm">{item.phoneNumbers?.[0] || 'No phone'}</Text>
+        <Text className="text-lg font-semibold text-white">{item.name}</Text>
+        <Text className="text-sm text-gray-400">
+          {item.phoneNumbers?.[0] || 'No phone'}
+        </Text>
       </View>
     </TouchableOpacity>
   );
 
   return (
     <View className="flex-1 bg-gray-900">
-      <Stack.Screen options={{ title: formatTitle(groupName ? String(groupName) : 'Add members') }} />
-      <View className="p-4 border-b border-gray-700">
+      <Stack.Screen
+        options={{
+          title: formatTitle(groupName ? String(groupName) : 'Add members'),
+        }}
+      />
+      <View className="border-b border-gray-700 p-4">
         <TextInput
-          className="bg-gray-800 text-white p-3 rounded-lg border border-gray-700"
+          className="rounded-lg border border-gray-700 bg-gray-800 p-3 text-white"
           placeholder="Search contacts..."
           placeholderTextColor="#9CA3AF"
           value={query}
           onChangeText={setQuery}
         />
       </View>
-      <FlatList data={filtered} renderItem={renderItem} keyExtractor={i => i.id} />
-      <View className="p-4 border-t border-gray-700">
-        <TouchableOpacity className={`p-4 rounded-lg ${saving ? 'bg-gray-600' : 'bg-blue-600'}`} onPress={onSave} disabled={saving}>
-          <Text className="text-white text-center font-bold text-lg">{saving ? 'Saving...' : 'Add members'}</Text>
+      <FlatList
+        data={filtered}
+        renderItem={renderItem}
+        keyExtractor={(i) => i.id}
+      />
+      <View className="border-t border-gray-700 p-4">
+        <TouchableOpacity
+          className={`rounded-lg p-4 ${saving ? 'bg-gray-600' : 'bg-blue-600'}`}
+          onPress={onSave}
+          disabled={saving}
+        >
+          <Text className="text-center text-lg font-bold text-white">
+            {saving ? 'Saving...' : 'Add members'}
+          </Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -117,5 +162,3 @@ function formatTitle(input?: string) {
   if (!s) return '';
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
-
-

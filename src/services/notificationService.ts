@@ -1,7 +1,8 @@
-import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
-import { auth, database } from '@/config/firebase';
+import * as Notifications from 'expo-notifications';
 import { ref, update } from 'firebase/database';
+
+import { auth, database } from '@/config/firebase';
 
 export class NotificationService {
   static async requestPermissions() {
@@ -25,7 +26,7 @@ export class NotificationService {
     try {
       const projectId = this.getProjectId();
       const { data: token } = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined as any
+        projectId ? { projectId } : (undefined as any),
       );
       return token;
     } catch (error) {
@@ -42,7 +43,7 @@ export class NotificationService {
       const token = await this.getExpoPushToken();
       if (!token) return null;
 
-      const currentUser = auth.currentUser;
+      const { currentUser } = auth;
       if (!currentUser) return token;
 
       const userRef = ref(database, `users/${currentUser.uid}`);
@@ -56,4 +57,4 @@ export class NotificationService {
       return null;
     }
   }
-} 
+}

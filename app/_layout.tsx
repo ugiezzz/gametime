@@ -1,15 +1,11 @@
-import { Stack, router } from 'expo-router';
-import { NativeWindStyleSheet } from 'nativewind';
+import { Ionicons } from '@expo/vector-icons';
+import * as Notifications from 'expo-notifications';
+import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import * as Notifications from 'expo-notifications';
-import { NotificationService } from '@/services/notificationService';
 import { TouchableOpacity } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 
-NativeWindStyleSheet.setOutput({
-  default: 'native',
-});
+import { NotificationService } from '@/services/notificationService';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -25,24 +21,27 @@ Notifications.setNotificationHandler({
 export default function Layout() {
   useEffect(() => {
     // Set up notification listeners
-    const subscription = Notifications.addNotificationReceivedListener(notification => {
-      console.log('Notification received:', notification);
-    });
+    const subscription = Notifications.addNotificationReceivedListener(
+      (notification) => {
+        console.log('Notification received:', notification);
+      },
+    );
 
-    const responseSubscription = Notifications.addNotificationResponseReceivedListener(response => {
-      try {
-        const data: any = response.notification.request.content.data || {};
-        if (data.groupId) {
-          router.push(`/group/${data.groupId}` as any);
-          return;
-        }
-        if (data.route && typeof data.route === 'string') {
-          router.push(data.route as any);
-          return;
-        }
-      } catch {}
-      console.log('Notification response:', response);
-    });
+    const responseSubscription =
+      Notifications.addNotificationResponseReceivedListener((response) => {
+        try {
+          const data: any = response.notification.request.content.data || {};
+          if (data.groupId) {
+            router.push(`/group/${data.groupId}` as any);
+            return;
+          }
+          if (data.route && typeof data.route === 'string') {
+            router.push(data.route as any);
+            return;
+          }
+        } catch {}
+        console.log('Notification response:', response);
+      });
 
     // Register device push token for the signed-in user
     NotificationService.registerPushTokenAsync().catch(() => {});
@@ -66,7 +65,10 @@ export default function Layout() {
             fontWeight: 'bold',
           },
           headerLeft: () => (
-            <TouchableOpacity onPress={() => router.back()} style={{ paddingHorizontal: 8, paddingVertical: 4 }}>
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
               <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
             </TouchableOpacity>
           ),
@@ -75,26 +77,26 @@ export default function Layout() {
           },
         }}
       >
-        <Stack.Screen 
-          name="index" 
-          options={{ 
+        <Stack.Screen
+          name="index"
+          options={{
             headerShown: false,
-            title: 'GameTime'
-          }} 
+            title: 'GameTime',
+          }}
         />
-        <Stack.Screen 
-          name="auth" 
-          options={{ 
+        <Stack.Screen
+          name="auth"
+          options={{
             headerShown: false,
-            title: 'Authentication'
-          }} 
+            title: 'Authentication',
+          }}
         />
-        <Stack.Screen 
-          name="(tabs)" 
-          options={{ 
+        <Stack.Screen
+          name="(tabs)"
+          options={{
             headerShown: false,
-            title: 'Main App'
-          }} 
+            title: 'Main App',
+          }}
         />
       </Stack>
     </>

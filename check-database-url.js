@@ -13,24 +13,24 @@ function testUrlAccessibility() {
       console.log(`✅ URL is accessible`);
       console.log(`   Status Code: ${res.statusCode}`);
       console.log(`   Content Type: ${res.headers['content-type']}`);
-      
+
       let data = '';
       res.on('data', (chunk) => {
         data += chunk;
       });
-      
+
       res.on('end', () => {
         console.log(`   Response: ${data.substring(0, 200)}...`);
         resolve();
       });
     });
-    
+
     req.on('error', (error) => {
       console.log(`❌ URL is not accessible`);
       console.log(`   Error: ${error.message}`);
       reject(error);
     });
-    
+
     req.setTimeout(5000, () => {
       console.log(`❌ URL timeout`);
       req.destroy();
@@ -42,20 +42,20 @@ function testUrlAccessibility() {
 // Test 2: Check Firebase project status
 function checkProjectStatus() {
   const projectUrl = 'https://gametime-app-4e0e3.firebaseapp.com';
-  
+
   return new Promise((resolve, reject) => {
     const req = https.get(projectUrl, (res) => {
       console.log(`\n✅ Firebase project is accessible`);
       console.log(`   Status Code: ${res.statusCode}`);
       resolve();
     });
-    
+
     req.on('error', (error) => {
       console.log(`\n❌ Firebase project is not accessible`);
       console.log(`   Error: ${error.message}`);
       reject(error);
     });
-    
+
     req.setTimeout(5000, () => {
       console.log(`\n❌ Project URL timeout`);
       req.destroy();
@@ -68,7 +68,7 @@ async function runChecks() {
   try {
     await testUrlAccessibility();
     await checkProjectStatus();
-    
+
     console.log('\n📊 Summary:');
     console.log('   ✅ Database URL format is correct');
     console.log('   ✅ Firebase project is accessible');
@@ -77,11 +77,10 @@ async function runChecks() {
     console.log('   2. Check Firebase Console → Realtime Database');
     console.log('   3. Verify database rules allow read/write');
     console.log('   4. Try accessing the database URL in browser');
-    
   } catch (error) {
     console.log('\n❌ Database URL check failed');
     console.log(`   Error: ${error.message}`);
   }
 }
 
-runChecks(); 
+runChecks();

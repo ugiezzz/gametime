@@ -1,16 +1,23 @@
 const { initializeApp } = require('firebase/app');
-const { getDatabase, ref, set, get, remove, connectDatabaseEmulator } = require('firebase/database');
+const {
+  getDatabase,
+  ref,
+  set,
+  get,
+  remove,
+  connectDatabaseEmulator,
+} = require('firebase/database');
 
 // Firebase configuration
 const firebaseConfig = {
-  apiKey: "AIzaSyCOVHqhturFgeo79MPcGDHiBTZD-ktPwDM",
-  authDomain: "gametime-app-4e0e3.firebaseapp.com",
-  projectId: "gametime-app-4e0e3",
-  storageBucket: "gametime-app-4e0e3.firebasestorage.app",
-  messagingSenderId: "262537480462",
-  appId: "1:262537480462:web:f3f8f46db82a3cb6d06f5f",
-  measurementId: "G-2R66RZS8C0",
-  databaseURL: "https://gametime-app-4e0e3-default-rtdb.firebaseio.com",
+  apiKey: 'AIzaSyCOVHqhturFgeo79MPcGDHiBTZD-ktPwDM',
+  authDomain: 'gametime-app-4e0e3.firebaseapp.com',
+  projectId: 'gametime-app-4e0e3',
+  storageBucket: 'gametime-app-4e0e3.firebasestorage.app',
+  messagingSenderId: '262537480462',
+  appId: '1:262537480462:web:f3f8f46db82a3cb6d06f5f',
+  measurementId: 'G-2R66RZS8C0',
+  databaseURL: 'https://gametime-app-4e0e3-default-rtdb.firebaseio.com',
 };
 
 console.log('🔍 Debugging Firebase Database Connection...\n');
@@ -45,14 +52,14 @@ async function testDatabaseConnection() {
     const testData = {
       message: 'Database write test',
       timestamp: new Date().toISOString(),
-      testId: Math.random().toString(36).substr(2, 9)
+      testId: Math.random().toString(36).substr(2, 9),
     };
-    
+
     console.log('   Attempting to write data...');
     await set(testRef, testData);
     console.log('   ✅ Write operation successful!');
     console.log(`   Data written: ${JSON.stringify(testData)}`);
-    
+
     // Test 3: Read operation
     console.log('\n✅ Test 3: Database Read Operation');
     const snapshot = await get(testRef);
@@ -62,29 +69,32 @@ async function testDatabaseConnection() {
     } else {
       console.log('   ⚠️  Data not found after write');
     }
-    
+
     // Cleanup
     await remove(testRef);
     console.log('   ✅ Test data cleaned up');
-    
   } catch (error) {
     console.log('\n❌ Test 2/3: Database Operations - FAILED');
     console.log(`   Error Type: ${error.constructor.name}`);
     console.log(`   Error Message: ${error.message}`);
     console.log(`   Error Code: ${error.code || 'N/A'}`);
-    
+
     if (error.message.includes('permission')) {
       console.log('\n💡 This looks like a permissions issue.');
       console.log('   Make sure your database rules allow read/write access.');
     } else if (error.message.includes('URL')) {
       console.log('\n💡 This looks like a URL configuration issue.');
-      console.log('   Check if the database URL is correct in Firebase Console.');
+      console.log(
+        '   Check if the database URL is correct in Firebase Console.',
+      );
     } else {
       console.log('\n💡 This might be a database initialization issue.');
-      console.log('   Try waiting a few minutes for the database to fully initialize.');
+      console.log(
+        '   Try waiting a few minutes for the database to fully initialize.',
+      );
     }
   }
 }
 
 // Run the debug test
-testDatabaseConnection().catch(console.error); 
+testDatabaseConnection().catch(console.error);
