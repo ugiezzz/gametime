@@ -12,6 +12,10 @@ export function getRiotApiKey(): string | undefined {
     if (typeof process !== 'undefined' && (process as any)?.env?.RIOT_API_KEY) {
       return (process as any).env.RIOT_API_KEY as string;
     }
-  } catch {}
+  } catch {
+    // Ignore errors when accessing config
+  }
   return undefined;
 }
+
+

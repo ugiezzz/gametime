@@ -2,7 +2,6 @@ import { initializeApp } from 'firebase/app';
 import { initializeAuth, signInWithCustomToken } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 import { getFirestore } from 'firebase/firestore';
-import { getFunctions, httpsCallable } from 'firebase/functions';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyCOVHqhturFgeo79MPcGDHiBTZD-ktPwDM',
@@ -16,14 +15,10 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-// Initialize Auth - Firebase v12 automatically handles persistence in React Native/Expo
+// For React Native, Firebase Auth automatically uses AsyncStorage for persistence
+// No need to explicitly configure persistence in newer versions
 const auth = initializeAuth(app);
 const db = getFirestore(app); // Firestore
 const database = getDatabase(app); // Realtime Database
-const functions = getFunctions(app);
 
-// Cloud Functions
-export const generateInviteLink = httpsCallable(functions, 'generateInviteLink');
-export const joinGroupViaLink = httpsCallable(functions, 'joinGroupViaLink');
-
-export { auth, database, db, functions, signInWithCustomToken };
+export { auth, database, db, signInWithCustomToken };

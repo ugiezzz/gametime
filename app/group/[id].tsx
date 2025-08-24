@@ -4,16 +4,18 @@ import { get, ref } from 'firebase/database';
 import React, { useEffect, useState } from 'react';
 import {
   Alert,
+  Clipboard,
   Modal,
   Pressable,
   ScrollView,
+  Share,
   Text,
   TouchableOpacity,
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auth, database } from '@/config/firebase';
+import { auth, database, generateInviteLink } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 import type { Group, Ping } from '@/services/firebaseGroupService';
 // import { NotificationService } from '@/services/notificationService';
@@ -180,7 +182,7 @@ export default function GroupDetailScreen() {
 
 // Inline component defs (kept here for minimal diff)
 function PingCardComponentDefs() {
-  return <></>;
+  return null;
 }
 
 function formatAbsoluteTime(dateMs: number): string {
@@ -476,7 +478,9 @@ function HeaderTitle({ group }: { group: Group }) {
               resolved.push({ uid, name });
             }
           }
-        } catch {}
+        } catch {
+          // Ignore individual member resolution errors
+        }
       }
       if (!cancelled) setMembers(resolved);
     };
@@ -512,13 +516,18 @@ function HeaderTitle({ group }: { group: Group }) {
             if (res.inGame && typeof res.elapsedMinutes === 'number') {
               next[uid] = `In game - ${res.elapsedMinutes}m`;
             }
-          } catch {}
-        } catch {}
+          } catch {
+            // Ignore individual game status errors
+          }
+        } catch {
+          // Ignore member status polling errors
+        }
       }
       if (!cancelled) setStatuses(next);
     };
     poll();
-    interval = setInterval(poll, 30000);
+    const intervalId = setInterval(poll, 30000);
+    interval = intervalId;
     return () => {
       cancelled = true;
       if (interval) clearInterval(interval);
@@ -686,6 +695,9 @@ function SchedulePing({
 
 function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
   const [open, setOpen] = React.useState(false);
+  const [inviteModalOpen, setInviteModalOpen] = React.useState(false);
+  const [inviteLink, setInviteLink] = React.useState<string>('');
+  const [generating, setGenerating] = React.useState(false);
   const isCreator = (uid?: string) => uid && uid === group.createdBy;
   const currentUserId = auth.currentUser?.uid;
   const canManage = isCreator(currentUserId);
@@ -738,6 +750,46 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
     );
   };
 
+  const handleCreateInviteLink = async () => {
+    console.log('🔗 [InviteLink] Starting invite link creation for groupId:', groupId);
+    setOpen(false);
+    setGenerating(true);
+    
+    try {
+      console.log('🔗 [InviteLink] Calling generateInviteLink Cloud Function...');
+      const result = await generateInviteLink({ groupId });
+      console.log('🔗 [InviteLink] Cloud Function response:', result);
+      
+      const data = result.data as { inviteLink: string; expiresInDays: number };
+      console.log('🔗 [InviteLink] Parsed data:', data);
+      
+      setInviteLink(data.inviteLink);
+      setInviteModalOpen(true);
+      console.log('🔗 [InviteLink] Invite link created successfully:', data.inviteLink);
+      
+    } catch (error: any) {
+      console.error('❌ [InviteLink] Error creating invite link:', error);
+      console.error('❌ [InviteLink] Error details:', {
+        message: error?.message,
+        code: error?.code,
+        details: error?.details,
+        stack: error?.stack
+      });
+      
+      let errorMessage = 'Failed to create invite link';
+      if (error?.message) {
+        errorMessage = error.message;
+      } else if (error?.code) {
+        errorMessage = `Error: ${error.code}`;
+      }
+      
+      Alert.alert('Error', errorMessage);
+    } finally {
+      setGenerating(false);
+      console.log('🔗 [InviteLink] Finished invite link creation process');
+    }
+  };
+
   return (
     <View>
       <TouchableOpacity onPress={() => setOpen((v) => !v)}>
@@ -756,6 +808,15 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
                 <>
                   <TouchableOpacity className="py-2" onPress={handleAddMember}>
                     <Text className="text-sm text-white">Add members</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    className="py-2" 
+                    onPress={handleCreateInviteLink}
+                    disabled={generating}
+                  >
+                    <Text className="text-sm text-white">
+                      {generating ? 'Creating invite link...' : 'Create invite link'}
+                    </Text>
                   </TouchableOpacity>
                   {canManage && (
                     <>
@@ -792,6 +853,77 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
               </View>
             </View>
           </Pressable>
+        </Modal>
+      )}
+
+      {/* Invite Link Modal */}
+      {inviteModalOpen && (
+        <Modal
+          transparent
+          animationType="slide"
+          visible
+          onRequestClose={() => setInviteModalOpen(false)}
+        >
+          <View className="flex-1 items-center justify-center bg-black/50 px-6">
+            <View className="w-full max-w-sm rounded-lg bg-gray-800 p-6">
+              <Text className="mb-4 text-lg font-semibold text-white">
+                Invite Link Created
+              </Text>
+              
+              <Text className="mb-2 text-sm text-gray-300">
+                Share this link to invite others to {group.name}:
+              </Text>
+              
+              <View className="mb-4 rounded bg-gray-700 p-3">
+                <Text className="text-xs text-gray-300" numberOfLines={3}>
+                  {inviteLink}
+                </Text>
+              </View>
+              
+              <Text className="mb-6 text-xs text-gray-400">
+                Expires in 7 days
+              </Text>
+              
+              <View className="flex-row space-x-3">
+                <TouchableOpacity
+                  className="flex-1 rounded bg-blue-600 py-3"
+                  onPress={async () => {
+                    await Clipboard.setString(inviteLink);
+                    Alert.alert('Copied!', 'Invite link copied to clipboard');
+                  }}
+                >
+                  <Text className="text-center font-semibold text-white">
+                    Copy Link
+                  </Text>
+                </TouchableOpacity>
+                
+                <TouchableOpacity
+                  className="flex-1 rounded bg-green-600 py-3"
+                  onPress={async () => {
+                    try {
+                      await Share.share({
+                        message: `Join our ${group.name} group on GameTime! ${inviteLink}`,
+                        title: `Join ${group.name}`,
+                      });
+                    } catch (error) {
+                      console.error('Error sharing:', error);
+                    }
+                  }}
+                >
+                  <Text className="text-center font-semibold text-white">
+                    Share
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              
+              <TouchableOpacity
+                className="mt-4 rounded bg-gray-700 py-3"
+                onPress={() => setInviteModalOpen(false)}
+              >
+                <Text className="text-center text-white">Close</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </Modal>
       )}
     </View>

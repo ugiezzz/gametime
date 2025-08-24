@@ -16,7 +16,8 @@
     "firebase-admin": "^11.8.0",
     "firebase-functions": "^4.3.1",
     "twilio": "^4.10.0",
-    "dotenv": "^16.0.3"
+    "dotenv": "^16.0.3",
+    "jsonwebtoken": "^9.0.2"
   },
   "devDependencies": {
     "firebase-functions-test": "^3.1.0"

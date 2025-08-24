@@ -1,9 +1,11 @@
 import { Ionicons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
+import * as Linking from 'expo-linking';
 import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { TouchableOpacity } from 'react-native';
+import { TouchableOpacity, View, Text } from 'react-native';
 
 import { NotificationService } from '@/services/notificationService';
 
@@ -18,7 +20,21 @@ Notifications.setNotificationHandler({
   }),
 });
 
+// Header back button component defined outside render to avoid React warnings
+const HeaderBackButton = () => (
+  <TouchableOpacity
+    onPress={() => router.back()}
+    style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+  >
+    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+  </TouchableOpacity>
+);
+
 export default function Layout() {
+  const [fontsLoaded] = useFonts({
+    ...Ionicons.font,
+  });
+
   useEffect(() => {
     // Set up notification listeners
     const subscription = Notifications.addNotificationReceivedListener(
@@ -39,18 +55,54 @@ export default function Layout() {
             router.push(data.route as any);
             return;
           }
-        } catch {}
+        } catch {
+          // Ignore notification data parsing errors
+        }
         console.log('Notification response:', response);
       });
 
     // Register device push token for the signed-in user
     NotificationService.registerPushTokenAsync().catch(() => {});
 
+    // Handle deep links
+    const handleDeepLink = (url: string) => {
+      console.log('Deep link received:', url);
+      
+      // Parse the URL to extract token for join links
+      const parsedUrl = Linking.parse(url);
+      
+      if (parsedUrl.path === '/join' && parsedUrl.queryParams?.token) {
+        const token = parsedUrl.queryParams.token as string;
+        router.push(`/join?token=${encodeURIComponent(token)}`);
+      }
+    };
+
+    // Handle initial URL if app was opened from a link
+    Linking.getInitialURL().then((url) => {
+      if (url) {
+        handleDeepLink(url);
+      }
+    });
+
+    // Handle URLs when app is already running
+    const linkingSubscription = Linking.addEventListener('url', (event) => {
+      handleDeepLink(event.url);
+    });
+
     return () => {
       subscription.remove();
       responseSubscription.remove();
+      linkingSubscription.remove();
     };
   }, []);
+
+  if (!fontsLoaded) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#333333' }}>
+        <Text style={{ color: '#FFFFFF' }}>Loading...</Text>
+      </View>
+    );
+  }
 
   return (
     <>
@@ -62,16 +114,9 @@ export default function Layout() {
           },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: {
-            fontWeight: 'bold',
+            fontWeight: '700' as any,
           },
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-            >
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          ),
+          headerLeft: HeaderBackButton,
           contentStyle: {
             backgroundColor: '#333333',
           },
