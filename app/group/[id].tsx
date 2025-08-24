@@ -21,17 +21,14 @@ import type { Group, Ping } from '@/services/firebaseGroupService';
 // import { NotificationService } from '@/services/notificationService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
 import { getActiveGameStatus } from '@/services/riotService';
+import { TimeService } from '@/services/timeService';
 
-// Response type removed (to be reintroduced when wiring responses)
-
-// Responses will be populated when real data is available
+// Response types and data structures for ping responses
 
 export default function GroupDetailScreen() {
   const { id } = useLocalSearchParams();
   const [group, setGroup] = useState<Group | null>(null);
-  // current game removed
   const [pings, setPings] = useState<Ping[]>([]);
-  // responses removed until wired to backend
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -57,7 +54,6 @@ export default function GroupDetailScreen() {
       const foundGroup = await FirebaseGroupService.getGroup(id as string);
       if (foundGroup) {
         setGroup(foundGroup);
-        // current game removed
       } else {
         Alert.alert('Error', 'Group not found');
         router.back();
@@ -78,7 +74,6 @@ export default function GroupDetailScreen() {
       (updatedGroup) => {
         if (updatedGroup) {
           setGroup(updatedGroup);
-          // current game removed
         }
       },
     );
@@ -97,9 +92,9 @@ export default function GroupDetailScreen() {
     }
   };
 
-  // formatTimestamp removed
 
-  // renderResponseItem removed
+
+
 
   if (loading) {
     return (
@@ -138,6 +133,13 @@ export default function GroupDetailScreen() {
       />
       <PingCardComponentDefs />
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
+        {/* Currently Playing Card */}
+        {group.game === 'League of Legends' && (
+          <View className="px-6 pb-4">
+            <CurrentlyPlayingCard group={group} />
+          </View>
+        )}
+
         {/* Ping Button */}
         <View className="p-6">
           <SchedulePing
@@ -185,10 +187,7 @@ function PingCardComponentDefs() {
   return <></>;
 }
 
-function formatAbsoluteTime(dateMs: number): string {
-  const date = new Date(dateMs);
-  return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
+// Removed formatAbsoluteTime wrapper - using TimeService.formatLocalTime directly
 
 function PingCard({
   ping,
@@ -208,8 +207,7 @@ function PingCard({
   // Options: 0, 5, 15 minutes from scheduled time
   const minuteOptions: number[] = [0, 5, 15];
   const now = Date.now();
-  const startsInMin = Math.max(0, Math.ceil((baseTimeMs - now) / 60000));
-  const timeLeftMin = Math.max(0, Math.ceil((ping.expiresAtMs - now) / 60000));
+  const timeUntilStart = TimeService.getTimeUntil(baseTimeMs);
 
   const responses = ping.responses || {};
   // Build buckets: absoluteTime -> [memberNames]; handle next round, declined, and pending separately
@@ -291,8 +289,8 @@ function PingCard({
       continue;
     }
     if (r.status === 'eta' && typeof r.etaMinutes === 'number') {
-      const targetMs = baseTimeMs + Math.max(0, r.etaMinutes) * 60000;
-      const label = formatAbsoluteTime(targetMs);
+      const targetMs = baseTimeMs + Math.max(0, r.etaMinutes) * TimeService.MINUTE_MS;
+      const label = TimeService.formatLocalTime(targetMs);
       const arr = buckets.get(label) || [];
       arr.push(name);
       buckets.set(label, arr);
@@ -310,9 +308,9 @@ function PingCard({
   // const selectedCount = selectedTargets.length;
   const earliestSelectedMs =
     selectedTargets.length > 0 ? Math.min(...selectedTargets) : baseTimeMs;
-  const earliestSelectedLabel = formatAbsoluteTime(earliestSelectedMs);
+  const earliestSelectedLabel = TimeService.formatLocalTime(earliestSelectedMs);
   const earliestNames = (() => {
-    const lbl = formatAbsoluteTime(earliestSelectedMs);
+    const lbl = TimeService.formatLocalTime(earliestSelectedMs);
     const arr = buckets.get(lbl) || [];
     return arr;
   })();
@@ -327,10 +325,10 @@ function PingCard({
         <View className="flex-1" />
         {now < baseTimeMs ? (
           <Text className="text-xs text-gray-400">
-            {startsInMin}m until start
+            {timeUntilStart} until start
           </Text>
         ) : (
-          <Text className="text-xs text-gray-400">{timeLeftMin}m left</Text>
+          <Text className="text-xs text-gray-400">{TimeService.getTimeUntil(ping.expiresAtMs)} left</Text>
         )}
       </View>
       <Text
@@ -401,7 +399,7 @@ function PingCard({
           <EtaButton
             key={m}
             minutes={m}
-            label={formatAbsoluteTime(baseTimeMs + m * 60000)}
+            label={TimeService.formatLocalTime(baseTimeMs + m * TimeService.MINUTE_MS)}
             pingId={ping.id}
             groupId={groupId}
           />
@@ -476,7 +474,6 @@ function HeaderTitle({ group }: { group: Group }) {
   const [members, setMembers] = React.useState<
     Array<{ uid: string; name: string }>
   >([]);
-  const [statuses, setStatuses] = React.useState<Record<string, string>>({});
 
   React.useEffect(() => {
     let cancelled = false;
@@ -524,43 +521,7 @@ function HeaderTitle({ group }: { group: Group }) {
     };
   }, [group.members, group.membersByUid]);
 
-  // Poll Riot statuses for LoL groups
-  React.useEffect(() => {
-    if (group.game !== 'League of Legends') {
-      setStatuses({});
-      return;
-    }
-    let cancelled = false;
-    let interval: any;
-    const poll = async () => {
-      const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
-      const next: Record<string, string> = {};
-      for (const uid of uids) {
-        try {
-          const puuidSnap = await get(ref(database, `users/${uid}/riotPuuid`));
-          const regionSnap = await get(
-            ref(database, `users/${uid}/riotRegion`),
-          );
-          const puuid = puuidSnap.exists() ? String(puuidSnap.val()) : '';
-          const region = regionSnap.exists() ? String(regionSnap.val()) : '';
-          if (!puuid || !region) continue;
-          try {
-            const res = await getActiveGameStatus(puuid, region as any);
-            if (res.inGame && typeof res.elapsedMinutes === 'number') {
-              next[uid] = `In game - ${res.elapsedMinutes}m`;
-            }
-          } catch {}
-        } catch {}
-      }
-      if (!cancelled) setStatuses(next);
-    };
-    poll();
-    interval = setInterval(poll, 30000);
-    return () => {
-      cancelled = true;
-      if (interval) clearInterval(interval);
-    };
-  }, [group.game, group.membersByUid]);
+  // Note: Riot game status polling is now handled by the CurrentlyPlayingCard component
 
   const fallbackCount = (group.members?.length ??
     (group.membersByUid
@@ -578,11 +539,7 @@ function HeaderTitle({ group }: { group: Group }) {
         ellipsizeMode="tail"
       >
         {members.length > 0
-          ? members
-              .map(({ uid, name }) =>
-                statuses[uid] ? `${name} (${statuses[uid]})` : name,
-              )
-              .join(', ')
+          ? members.map(({ name }) => name).join(', ')
           : `${fallbackCount} member${fallbackCount === 1 ? '' : 's'}`}
       </Text>
     </View>
@@ -595,15 +552,7 @@ function SchedulePing({
 }: {
   onSend: (scheduledAtMs?: number) => Promise<void>;
 }) {
-  const now = new Date();
-  const roundUp10 = (d: Date) => {
-    const m = d.getMinutes();
-    const add = (10 - (m % 10)) % 10;
-    const copy = new Date(d);
-    copy.setMinutes(m + add, 0, 0);
-    return copy;
-  };
-  const [time, setTime] = React.useState<Date>(roundUp10(now));
+  const [time, setTime] = React.useState<Date>(TimeService.getNextRounded10Minutes());
 
   const incHour = () =>
     setTime(
@@ -717,6 +666,127 @@ function SchedulePing({
           </View>
         </View>
       </View>
+    </View>
+  );
+}
+
+// Helper function to format elapsed time in minutes and seconds
+function formatElapsedTime(elapsedMinutes: number): string {
+  if (elapsedMinutes < 60) {
+    return `${elapsedMinutes}m`;
+  }
+  const hours = Math.floor(elapsedMinutes / 60);
+  const minutes = elapsedMinutes % 60;
+  return `${hours}h ${minutes}m`;
+}
+
+// Currently Playing Card Component
+function CurrentlyPlayingCard({ group }: { group: Group }) {
+  const [playingMembers, setPlayingMembers] = React.useState<
+    Array<{ uid: string; name: string; elapsedMinutes: number }>
+  >([]);
+
+  React.useEffect(() => {
+    if (group.game !== 'League of Legends') {
+      setPlayingMembers([]);
+      return;
+    }
+
+    let cancelled = false;
+    let interval: any;
+
+    const checkActiveGames = async () => {
+      const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
+      const playing: Array<{ uid: string; name: string; elapsedMinutes: number }> = [];
+      
+      for (const uid of uids) {
+        try {
+          // Get user's Riot data
+          const puuidSnap = await get(ref(database, `users/${uid}/riotPuuid`));
+          const regionSnap = await get(ref(database, `users/${uid}/riotRegion`));
+          const puuid = puuidSnap.exists() ? String(puuidSnap.val()) : '';
+          const region = regionSnap.exists() ? String(regionSnap.val()) : '';
+          
+          if (!puuid || !region) continue;
+
+          // Check game status
+          try {
+            const res = await getActiveGameStatus(puuid, region as any);
+            if (res.inGame && typeof res.elapsedMinutes === 'number') {
+              // Get user's display name
+              let name = 'Unknown User';
+              const currentUid = auth.currentUser?.uid;
+              if (uid === currentUid) {
+                name = 'You';
+              } else {
+                try {
+                  const nameSnap = await get(ref(database, `users/${uid}/displayName`));
+                  if (nameSnap.exists()) {
+                    const displayName = String(nameSnap.val());
+                    if (displayName && displayName.trim().length > 0) {
+                      name = displayName;
+                    }
+                  }
+                } catch {}
+              }
+              
+              playing.push({
+                uid,
+                name,
+                elapsedMinutes: res.elapsedMinutes
+              });
+            }
+          } catch (error) {
+            // Silently handle individual player errors
+            console.log(`Failed to get game status for ${uid}:`, error);
+          }
+        } catch (error) {
+          // Silently handle user data fetch errors
+          console.log(`Failed to get user data for ${uid}:`, error);
+        }
+      }
+
+      if (!cancelled) {
+        setPlayingMembers(playing);
+      }
+    };
+
+    // Initial check
+    checkActiveGames();
+    
+    // Poll every 30 seconds
+    interval = setInterval(checkActiveGames, 30000);
+
+    return () => {
+      cancelled = true;
+      if (interval) clearInterval(interval);
+    };
+  }, [group.game, group.membersByUid]);
+
+  // Don't render if no one is playing
+  if (playingMembers.length === 0) {
+    return null;
+  }
+
+  return (
+    <View className="rounded-lg bg-purple-800 p-4">
+      <View className="mb-3 flex-row items-center">
+        <Ionicons name="game-controller" size={20} color="#A855F7" />
+        <Text className="ml-2 text-lg font-semibold text-white">
+          Currently playing
+        </Text>
+      </View>
+      
+      {playingMembers.map((member) => (
+        <View key={member.uid} className="mb-2 flex-row items-center justify-between">
+          <Text className="flex-1 text-base text-white">
+            {member.name}
+          </Text>
+          <Text className="text-sm text-purple-300">
+            Playing for: {formatElapsedTime(member.elapsedMinutes)}
+          </Text>
+        </View>
+      ))}
     </View>
   );
 }

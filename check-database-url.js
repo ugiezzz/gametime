@@ -1,8 +1,11 @@
 const https = require('https');
 
+// Import centralized Firebase configuration
+const { firebaseConfig } = require('./firebase.config.js');
+
 console.log('🔍 Checking Database URL Accessibility...\n');
 
-const databaseUrl = 'https://gametime-app-4e0e3-default-rtdb.firebaseio.com';
+const databaseUrl = firebaseConfig.databaseURL;
 
 console.log(`📋 Testing URL: ${databaseUrl}\n`);
 
@@ -41,7 +44,7 @@ function testUrlAccessibility() {
 
 // Test 2: Check Firebase project status
 function checkProjectStatus() {
-  const projectUrl = 'https://gametime-app-4e0e3.firebaseapp.com';
+  const projectUrl = `https://${firebaseConfig.authDomain}`;
 
   return new Promise((resolve, reject) => {
     const req = https.get(projectUrl, (res) => {

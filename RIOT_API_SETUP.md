@@ -149,3 +149,4 @@ firebase functions:secrets:access RIOT_API_KEY
 - ✅ No console warnings about deprecated functions
 
 **Your Riot API integration is now secure!** 🎉
+

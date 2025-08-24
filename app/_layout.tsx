@@ -8,6 +8,7 @@ import { useEffect } from 'react';
 import { TouchableOpacity, View, Text } from 'react-native';
 
 import { NotificationService } from '@/services/notificationService';
+import { TimeService } from '@/services/timeService';
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -30,6 +31,34 @@ export default function Layout() {
     const subscription = Notifications.addNotificationReceivedListener(
       (notification) => {
         console.log('Notification received:', notification);
+        
+        // Handle different notification types with local time formatting
+        const data = notification.request.content.data as any;
+        
+        if (data?.type === 'ping' && data?.scheduledAtMs) {
+          // Original ping notification
+          try {
+            const creatorName = notification.request.content.body?.split(' start playing')[0] || 'Someone';
+            const localTimeBody = TimeService.formatNotificationTime(data.scheduledAtMs, creatorName);
+            
+            // Update notification content for display
+            (notification.request.content as any).body = localTimeBody;
+          } catch (error) {
+            console.log('Error updating ping notification time:', error);
+          }
+        } else if (data?.type === 'ping_response' && data?.selectedTimeMs) {
+          // Ping response notification
+          try {
+            const responderName = notification.request.content.body?.split(' would love to join')[0] || 'Someone';
+            const localTime = TimeService.formatLocalTime(data.selectedTimeMs);
+            const localTimeBody = `${responderName} would love to join at ${localTime}`;
+            
+            // Update notification content for display
+            (notification.request.content as any).body = localTimeBody;
+          } catch (error) {
+            console.log('Error updating response notification time:', error);
+          }
+        }
       },
     );
 
@@ -37,10 +66,14 @@ export default function Layout() {
       Notifications.addNotificationResponseReceivedListener((response) => {
         try {
           const data: any = response.notification.request.content.data || {};
+          
+          // Handle both ping and ping_response notifications - both navigate to group
           if (data.groupId) {
             router.push(`/group/${data.groupId}` as any);
             return;
           }
+          
+          // Fallback route handling
           if (data.route && typeof data.route === 'string') {
             router.push(data.route as any);
             return;

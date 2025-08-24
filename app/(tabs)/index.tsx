@@ -9,6 +9,7 @@ import { database } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 import type { Group } from '@/services/firebaseGroupService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { TimeService } from '@/services/timeService';
 
 export default function GroupsScreen() {
   const [groups, setGroups] = useState<Group[]>([]);
@@ -101,17 +102,7 @@ export default function GroupsScreen() {
 
   const formatLastPing = (date: Date | undefined) => {
     if (!date) return 'Never';
-
-    const now = new Date();
-    const diff = now.getTime() - date.getTime();
-    const minutes = Math.floor(diff / (1000 * 60));
-    const hours = Math.floor(diff / (1000 * 60 * 60));
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (days > 0) return `${days}d ago`;
-    if (hours > 0) return `${hours}h ago`;
-    if (minutes > 0) return `${minutes}m ago`;
-    return 'Just now';
+    return TimeService.getTimeSince(date.getTime());
   };
 
   const renderGroupItem = ({ item }: { item: Group }) => {

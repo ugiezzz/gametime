@@ -1,17 +1,8 @@
 const { initializeApp } = require('firebase/app');
 const { getAuth, signInWithCustomToken } = require('firebase/auth');
 
-// Firebase config (same as in the app)
-const firebaseConfig = {
-  apiKey: 'AIzaSyCOVHqhturFgeo79MPcGDHiBTZD-ktPwDM',
-  authDomain: 'gametime-app-4e0e3.firebaseapp.com',
-  projectId: 'gametime-app-4e0e3',
-  storageBucket: 'gametime-app-4e0e3.firebasestorage.app',
-  messagingSenderId: '262537480462',
-  appId: '1:262537480462:web:f3f8f46db82a3cb6d06f5f',
-  measurementId: 'G-2R66RZS8C0',
-  databaseURL: 'https://gametime-app-4e0e3-default-rtdb.firebaseio.com',
-};
+// Import centralized Firebase configuration
+const { firebaseConfig, functionsConfig } = require('./firebase.config.js');
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
@@ -27,10 +18,8 @@ console.log('   - Database URL:', firebaseConfig.databaseURL);
 
 // Test 2: Cloud Functions URLs
 console.log('\n✅ Test 2: Cloud Functions URLs');
-const functionsBaseUrl =
-  'https://us-central1-gametime-app-4e0e3.cloudfunctions.net';
-console.log('   - Send OTP:', `${functionsBaseUrl}/sendOtp`);
-console.log('   - Verify OTP:', `${functionsBaseUrl}/verifyOtp`);
+console.log('   - Send OTP:', `${functionsConfig.baseUrl}${functionsConfig.endpoints.sendOtp}`);
+console.log('   - Verify OTP:', `${functionsConfig.baseUrl}${functionsConfig.endpoints.verifyOtp}`);
 
 // Test 3: Auth Service Methods
 console.log('\n✅ Test 3: Auth Service Methods Available');
