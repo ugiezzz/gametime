@@ -18,6 +18,7 @@ export type SpecificRegion =
 
 export type SuperRegion = 'americas' | 'europe' | 'asia' | 'sea';
 
+// Legacy interface - no longer needed since we use cloud functions
 export interface RiotConfig {
   apiKey: string;
 }
@@ -41,15 +42,21 @@ const REGION_TO_SUPER: Record<SpecificRegion, SuperRegion> = {
   VN2: 'sea',
 };
 
+// Legacy configuration - no longer needed with cloud functions
 let config: RiotConfig | null = null;
 
+// Legacy function - kept for backward compatibility but not required
 export function configureRiotService(newConfig: RiotConfig) {
   config = newConfig;
+  console.log('⚠️ configureRiotService is deprecated. Riot API calls now use secure cloud functions.');
 }
 
 export function getSuperRegion(from: SpecificRegion): SuperRegion {
   return REGION_TO_SUPER[from];
 }
+
+// Import cloud functions
+import { resolveSummonerId as resolveSummonerIdCF, getActiveGameStatus as getActiveGameStatusCF } from '@/config/firebase';
 
 export function parseRiotId(
   riotId: string,
@@ -62,61 +69,59 @@ export function parseRiotId(
   return { gameName, tagLine };
 }
 
-async function fetchJson(url: string) {
-  if (!config?.apiKey) throw new Error('Riot API key is not configured');
-  const resp = await fetch(url, {
-    headers: { 'X-Riot-Token': config.apiKey } as any,
-  });
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(`HTTP ${resp.status}: ${text || 'Request failed'}`);
-  }
-  return resp.json();
-}
-
+// Secure cloud function implementation
 export async function resolveSummonerId(
   riotId: string,
   region: SpecificRegion,
 ): Promise<{ puuid: string; summonerId: string }> {
-  const parsed = parseRiotId(riotId);
-  if (!parsed)
-    throw new Error('Invalid Riot ID format. Expected gameName#tagLine');
-  const { gameName, tagLine } = parsed;
-  const superRegion = getSuperRegion(region);
-  const hostSuper = String(superRegion).toLowerCase();
-  const hostRegion = String(region).toLowerCase();
-  const accountUrl = `https://${hostSuper}.api.riotgames.com/riot/account/v1/accounts/by-riot-id/${encodeURIComponent(gameName)}/${encodeURIComponent(tagLine)}`;
-  const acc = await fetchJson(accountUrl);
-  const puuid = acc.puuid as string;
-  if (!puuid) throw new Error('PUUID not found for Riot ID');
-  // Resolve by PUUID (preferred). Note: some keys may mask id; return empty if unavailable.
-  const summonerByPuuidUrl = `https://${hostRegion}.api.riotgames.com/lol/summoner/v4/summoners/by-puuid/${encodeURIComponent(puuid)}`;
-  const summByPuuid = await fetchJson(summonerByPuuidUrl);
-  const summonerId =
-    typeof summByPuuid?.id === 'string' ? String(summByPuuid.id) : '';
-  return { puuid, summonerId };
+  try {
+    const result = await resolveSummonerIdCF({ riotId, region });
+    return {
+      puuid: result.data.puuid,
+      summonerId: result.data.summonerId,
+    };
+  } catch (error: any) {
+    console.error('Riot API error:', error);
+    
+    // Handle Firebase Functions errors
+    if (error?.code === 'functions/not-found') {
+      throw new Error('Summoner not found');
+    }
+    if (error?.code === 'functions/permission-denied') {
+      throw new Error('API key invalid or expired');
+    }
+    if (error?.code === 'functions/resource-exhausted') {
+      throw new Error('Rate limit exceeded. Please try again later.');
+    }
+    if (error?.code === 'functions/unauthenticated') {
+      throw new Error('You must be signed in to use this feature');
+    }
+    
+    throw new Error(error?.message || 'Failed to resolve summoner ID');
+  }
 }
 
 export async function getActiveGameStatus(
   puuid: string,
   region: SpecificRegion,
-): Promise<{ inGame: boolean; elapsedMinutes?: number }> {
-  if (!config?.apiKey) throw new Error('Riot API key is not configured');
-  const hostRegion = String(region).toLowerCase();
-  const url = `https://${hostRegion}.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/${encodeURIComponent(puuid)}`;
-  const resp = await fetch(url, {
-    headers: { 'X-Riot-Token': config.apiKey } as any,
-  });
-  if (resp.status === 404) return { inGame: false };
-  if (!resp.ok) {
-    const text = await resp.text().catch(() => '');
-    throw new Error(
-      `HTTP ${resp.status}: ${text || 'Spectator request failed'}`,
-    );
+): Promise<{ inGame: boolean; elapsedMinutes?: number; gameMode?: string; gameType?: string }> {
+  try {
+    const result = await getActiveGameStatusCF({ puuid, region });
+    return result.data;
+  } catch (error: any) {
+    console.error('Riot API error:', error);
+    
+    // Handle Firebase Functions errors
+    if (error?.code === 'functions/permission-denied') {
+      throw new Error('API key invalid or expired');
+    }
+    if (error?.code === 'functions/resource-exhausted') {
+      throw new Error('Rate limit exceeded. Please try again later.');
+    }
+    if (error?.code === 'functions/unauthenticated') {
+      throw new Error('You must be signed in to use this feature');
+    }
+    
+    throw new Error(error?.message || 'Failed to get game status');
   }
-  const data = await resp.json();
-  const start =
-    typeof data.gameStartTime === 'number' ? data.gameStartTime : Date.now();
-  const elapsedMinutes = Math.round((Date.now() - start) / 60000);
-  return { inGame: true, elapsedMinutes };
 }

@@ -17,6 +17,7 @@ export default function Index() {
       const key = getRiotApiKey();
       if (key) configureRiotService({ apiKey: key });
     } catch {}
+    
     // Navigate after Firebase rehydrates auth (persistent session)
     const unsubscribe = CustomAuthService.onAuthStateChanged(async (user) => {
       if (!user) {

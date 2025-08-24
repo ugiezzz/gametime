@@ -12,20 +12,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { joinGroupViaLink } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 
-// Header back button component defined outside render to avoid React warnings
-const HeaderBackButton = () => (
-  <TouchableOpacity
-    onPress={() => router.back()}
-    style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-  >
-    <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
-  </TouchableOpacity>
-);
-
 export default function JoinScreen() {
   const { token } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
-  const [groupName] = useState<string>('');
+  const [groupName, setGroupName] = useState<string>('');
 
   useEffect(() => {
     // If user is not authenticated, redirect to auth first
@@ -126,7 +116,14 @@ export default function JoinScreen() {
           headerTitle: 'Join Group',
           headerStyle: { backgroundColor: '#111827' },
           headerTintColor: '#E5E7EB',
-          headerLeft: HeaderBackButton,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
+            </TouchableOpacity>
+          ),
         }}
       />
       
@@ -138,7 +135,7 @@ export default function JoinScreen() {
         </Text>
         
         <Text className="mt-2 text-center text-gray-400">
-          You&apos;ve been invited to join a GameTime group!
+          You've been invited to join a GameTime group!
         </Text>
 
         {groupName && (

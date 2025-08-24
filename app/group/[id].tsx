@@ -182,7 +182,7 @@ export default function GroupDetailScreen() {
 
 // Inline component defs (kept here for minimal diff)
 function PingCardComponentDefs() {
-  return null;
+  return <></>;
 }
 
 function formatAbsoluteTime(dateMs: number): string {
@@ -218,7 +218,10 @@ function PingCard({
   const declined: string[] = [];
   const pending: string[] = [];
   const uidToName = new Map<string, string>();
+  
+  // Populate names from deprecated members list if available
   for (const m of group.members ?? []) uidToName.set(m.id, m.name);
+  
   const viewerUid = auth.currentUser?.uid;
   if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
   if (group.createdBy && !uidToName.has(group.createdBy))
@@ -232,9 +235,41 @@ function PingCard({
     ...Object.keys(responses),
     ...memberUidsFromGroup,
   ]);
+  
+  // For users without names in the map, try to fetch from database or use fallback
+  const [memberNames, setMemberNames] = React.useState<Map<string, string>>(uidToName);
+  
+  React.useEffect(() => {
+    const loadMissingNames = async () => {
+      const updatedNames = new Map(uidToName);
+      let hasUpdates = false;
+      
+      for (const uid of allUids) {
+        if (!updatedNames.has(uid)) {
+          try {
+            const snap = await get(ref(database, `users/${uid}/displayName`));
+            if (snap.exists()) {
+              const name = String(snap.val());
+              if (name && name.trim().length > 0) {
+                updatedNames.set(uid, name);
+                hasUpdates = true;
+              }
+            }
+          } catch {}
+        }
+      }
+      
+      if (hasUpdates) {
+        setMemberNames(updatedNames);
+      }
+    };
+    
+    loadMissingNames();
+  }, [ping.id, allUids.size]);
+
   const selectedTargets: number[] = [];
   for (const uid of allUids) {
-    const name = uidToName.get(uid) || 'Member';
+    const name = memberNames.get(uid) || 'Unknown User';
     const r = responses[uid];
     if (!r) {
       pending.push(name);
@@ -478,9 +513,7 @@ function HeaderTitle({ group }: { group: Group }) {
               resolved.push({ uid, name });
             }
           }
-        } catch {
-          // Ignore individual member resolution errors
-        }
+        } catch {}
       }
       if (!cancelled) setMembers(resolved);
     };
@@ -516,18 +549,13 @@ function HeaderTitle({ group }: { group: Group }) {
             if (res.inGame && typeof res.elapsedMinutes === 'number') {
               next[uid] = `In game - ${res.elapsedMinutes}m`;
             }
-          } catch {
-            // Ignore individual game status errors
-          }
-        } catch {
-          // Ignore member status polling errors
-        }
+          } catch {}
+        } catch {}
       }
       if (!cancelled) setStatuses(next);
     };
     poll();
-    const intervalId = setInterval(poll, 30000);
-    interval = intervalId;
+    interval = setInterval(poll, 30000);
     return () => {
       cancelled = true;
       if (interval) clearInterval(interval);
@@ -820,7 +848,6 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
                   </TouchableOpacity>
                   {canManage && (
                     <>
-                      <View className="my-1 h-px bg-gray-700" />
                       <TouchableOpacity
                         className="py-2"
                         onPress={handleDeleteGroup}
@@ -829,7 +856,6 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
                           Delete group
                         </Text>
                       </TouchableOpacity>
-                      <View className="my-1 h-px bg-gray-700" />
                       {Array.isArray(group.members) &&
                         group.members.length > 0 &&
                         group.members.map((m) => (
@@ -845,7 +871,6 @@ function MenuButton({ groupId, group }: { groupId: string; group: Group }) {
                         ))}
                     </>
                   )}
-                  <View className="my-1 h-px bg-gray-700" />
                   <TouchableOpacity className="py-2" onPress={handleExit}>
                     <Text className="text-sm text-red-400">Exit group</Text>
                   </TouchableOpacity>

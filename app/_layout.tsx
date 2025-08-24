@@ -20,16 +20,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-// Header back button component defined outside render to avoid React warnings
-const HeaderBackButton = () => (
-  <TouchableOpacity
-    onPress={() => router.back()}
-    style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-  >
-    <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-  </TouchableOpacity>
-);
-
 export default function Layout() {
   const [fontsLoaded] = useFonts({
     ...Ionicons.font,
@@ -55,9 +45,7 @@ export default function Layout() {
             router.push(data.route as any);
             return;
           }
-        } catch {
-          // Ignore notification data parsing errors
-        }
+        } catch {}
         console.log('Notification response:', response);
       });
 
@@ -114,9 +102,16 @@ export default function Layout() {
           },
           headerTintColor: '#FFFFFF',
           headerTitleStyle: {
-            fontWeight: '700' as any,
+            fontWeight: 'bold',
           },
-          headerLeft: HeaderBackButton,
+          headerLeft: () => (
+            <TouchableOpacity
+              onPress={() => router.back()}
+              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+            >
+              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+            </TouchableOpacity>
+          ),
           contentStyle: {
             backgroundColor: '#333333',
           },
