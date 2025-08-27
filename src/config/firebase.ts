@@ -40,6 +40,7 @@ const functions = getFunctions(app);
 // Cloud Functions
 export const generateInviteLink = httpsCallable(functions, 'generateInviteLink');
 export const joinGroupViaLink = httpsCallable(functions, 'joinGroupViaLink');
+export const sendNextGameNotification = httpsCallable(functions, 'sendNextGameNotification');
 
 // Riot API Cloud Functions (Secure)
 export const resolveSummonerId = httpsCallable(functions, 'resolveSummonerId');

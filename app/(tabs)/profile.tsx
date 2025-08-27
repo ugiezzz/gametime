@@ -79,7 +79,7 @@ export default function ProfileScreen() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [editing]);
 
   const handleLogout = () => {
     Alert.alert('Logout', 'Are you sure you want to logout?', [
@@ -195,17 +195,23 @@ export default function ProfileScreen() {
       }
       const groupIds: string[] = Object.keys(idxSnap.val() || {});
       const lines: string[] = [];
-      for (const gid of groupIds) {
+      
+      // Use Promise.all to fetch all groups in parallel instead of sequentially
+      const groupPromises = groupIds.map(async (gid) => {
         const groupSnap = await get(ref(database, `groups/${gid}`));
-        if (!groupSnap.exists()) continue;
+        if (!groupSnap.exists()) return null;
         const group = groupSnap.val();
         const membersByUid = group.membersByUid
           ? Object.keys(group.membersByUid)
           : [];
         const hasMe = me ? membersByUid.includes(me) : false;
         const hasIndex = true; // we already read from userGroups/{me}
-        lines.push(`${gid} • member=${hasMe} • userGroupsIndex=${hasIndex}`);
-      }
+        return `${gid} • member=${hasMe} • userGroupsIndex=${hasIndex}`;
+      });
+      
+      const results = await Promise.all(groupPromises);
+      const validResults = results.filter(Boolean) as string[];
+      lines.push(...validResults);
       setDebugOutput(lines.join('\n'));
     } catch (e: any) {
       setDebugOutput(`Error: ${e?.message || e}`);

@@ -100,4 +100,86 @@ export class CustomAuthService {
   static isAuthenticated(): boolean {
     return auth.currentUser !== null;
   }
+
+  // Send test notification (for test account only)
+  static async sendTestNotification(phoneNumber: string, otp: string): Promise<string> {
+    try {
+      // First verify the test account
+      const user = await this.verifyOTP(phoneNumber, otp);
+      
+      // Then send test notification
+      const response = await fetch(`${this.functionsBaseUrl}/sendTestNotification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          uid: user.uid,
+          message: 'Test notification from GameTime app'
+        }),
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to send test notification';
+        try {
+          const text = await response.text();
+          if (text) {
+            try {
+              const data = JSON.parse(text);
+              message = data.error || data.message || text;
+            } catch {
+              message = text;
+            }
+          }
+        } catch {}
+        throw new Error(message);
+      }
+
+      const result = await response.json();
+      return result.message || 'Test notification sent successfully';
+    } catch (error) {
+      console.error('Error sending test notification:', error);
+      if (error instanceof Error) throw error;
+      throw new Error('Failed to send test notification. Please try again.');
+    }
+  }
+
+  // Send test notification with custom message (for test account only)
+  static async sendTestNotificationWithMessage(phoneNumber: string, otp: string, customMessage: string): Promise<string> {
+    try {
+      // First verify the test account
+      const user = await this.verifyOTP(phoneNumber, otp);
+      
+      // Then send test notification with custom message
+      const response = await fetch(`${this.functionsBaseUrl}/sendTestNotification`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          uid: user.uid,
+          message: customMessage
+        }),
+      });
+
+      if (!response.ok) {
+        let message = 'Failed to send custom test notification';
+        try {
+          const text = await response.text();
+          if (text) {
+            try {
+              const data = JSON.parse(text);
+              message = data.error || data.message || text;
+            } catch {
+              message = text;
+            }
+          }
+        } catch {}
+        throw new Error(message);
+      }
+
+      const result = await response.json();
+      return result.message || 'Custom test notification sent successfully';
+    } catch (error) {
+      console.error('Error sending custom test notification:', error);
+      if (error instanceof Error) throw error;
+      throw new Error('Failed to send custom test notification. Please try again.');
+    }
+  }
 }

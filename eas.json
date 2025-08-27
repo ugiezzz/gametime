@@ -11,12 +11,22 @@
     "preview": {
       "distribution": "internal",
       "developmentClient": true
+    },
+    "development": {
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {
     "production": {}
   }
 }
+
+
+
+
 
 
 

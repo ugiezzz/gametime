@@ -1,0 +1,30 @@
+{
+  "project_info": {
+    "project_number": "262537480462",
+    "firebase_url": "https://gametime-app-4e0e3-default-rtdb.firebaseio.com",
+    "project_id": "gametime-app-4e0e3",
+    "storage_bucket": "gametime-app-4e0e3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:262537480462:android:a3eaffb638726b5fd06f5f",
+        "android_client_info": {
+          "package_name": "com.gametime.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAElim4NhHkXXtzBxd4macRqwWgUKyz8tw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

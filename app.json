@@ -33,6 +33,7 @@
       },
       "package": "com.gametimeapp.app",
       "versionCode": 1,
+      "googleServicesFile":  "C:/Users/User/OneDrive/Documents/Mobileapp infra/gameTime/google-services.json",
       "permissions": [
         "READ_CONTACTS",
         "POST_NOTIFICATIONS",

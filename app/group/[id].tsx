@@ -222,8 +222,6 @@ function PingCard({
   
   const viewerUid = auth.currentUser?.uid;
   if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
-  if (group.createdBy && !uidToName.has(group.createdBy))
-    uidToName.set(group.createdBy, 'Creator');
 
   const memberUidsFromGroup =
     Array.isArray(group.members) && group.members.length > 0
