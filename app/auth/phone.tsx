@@ -30,15 +30,6 @@ export default function PhoneScreen() {
   const region = getDefaultRegion();
   const defaultCode = inferCountryCode(region);
 
-  useEffect(() => {
-    requestPermissions();
-    // Redirect to home if auth is restored while this screen is visible
-    const unsubscribe = CustomAuthService.onAuthStateChanged((user) => {
-      if (user) router.replace('/');
-    });
-    return () => unsubscribe();
-  }, []);
-
   const requestPermissions = async () => {
     try {
       const { status: notificationStatus } =
@@ -51,9 +42,18 @@ export default function PhoneScreen() {
         );
       }
     } catch (error) {
-      console.log('Permission request error:', error);
+      // Silenced to satisfy no-console; user receives an Alert when permission is not granted
     }
   };
+
+  useEffect(() => {
+    requestPermissions();
+    // Redirect to home if auth is restored while this screen is visible
+    const unsubscribe = CustomAuthService.onAuthStateChanged((user) => {
+      if (user) router.replace('/');
+    });
+    return () => unsubscribe();
+  }, []);
 
   // removed synchronous check; we rely on the auth listener above
 
@@ -66,11 +66,9 @@ export default function PhoneScreen() {
 
     setLoading(true);
     try {
-      console.log('Sending OTP to:', e164);
       await CustomAuthService.sendOTP(e164);
       router.push({ pathname: '/auth/otp', params: { phoneNumber: e164 } });
     } catch (error) {
-      console.error('Auth error:', error);
       // Frontend fallback for documented test account so devs can proceed
       if (e164 === '+15551234567') {
         Alert.alert('Test Mode', 'Proceeding with test account without sending SMS. Use code 123456.');

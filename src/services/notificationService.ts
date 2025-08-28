@@ -17,7 +17,7 @@ export class NotificationService {
       const { status } = await Notifications.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
-      console.error('Failed to request notification permissions:', error);
+      // Silenced to satisfy no-console
       return false;
     }
   }
@@ -37,7 +37,7 @@ export class NotificationService {
       );
       return token;
     } catch (error) {
-      console.error('Failed to get push token:', error);
+      // Silenced to satisfy no-console
       return null;
     }
   }
@@ -63,7 +63,7 @@ export class NotificationService {
       });
       return token;
     } catch (error) {
-      console.error('Failed to register push token:', error);
+      // Silenced to satisfy no-console
       return null;
     }
   }

@@ -55,31 +55,35 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     const user = auth.currentUser;
-    if (!user) return;
+    let unsubscribe: (() => void) | undefined;
 
-    const userRef = ref(database, `users/${user.uid}`);
-    const unsubscribe = onValue(userRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const val = snapshot.val() as {
-          displayName?: string;
-          phoneNumber?: string;
-          riotGameName?: string;
-          riotTagLine?: string;
-          riotRegion?: SpecificRegion;
-        };
-        setDisplayName(val.displayName || null);
-        setPhoneNumber(val.phoneNumber || null);
-        if (!editing) setNameInput(val.displayName || '');
-        const riot = [val.riotGameName, val.riotTagLine]
-          .filter(Boolean)
-          .join('#');
-        setRiotIdInput(riot || '');
-        if (val.riotRegion)
-          setRiotRegionInput(val.riotRegion as SpecificRegion);
-      }
-    });
+    if (user) {
+      const userRef = ref(database, `users/${user.uid}`);
+      unsubscribe = onValue(userRef, (snapshot) => {
+        if (snapshot.exists()) {
+          const val = snapshot.val() as {
+            displayName?: string;
+            phoneNumber?: string;
+            riotGameName?: string;
+            riotTagLine?: string;
+            riotRegion?: SpecificRegion;
+          };
+          setDisplayName(val.displayName || null);
+          setPhoneNumber(val.phoneNumber || null);
+          if (!editing) setNameInput(val.displayName || '');
+          const riot = [val.riotGameName, val.riotTagLine]
+            .filter(Boolean)
+            .join('#');
+          setRiotIdInput(riot || '');
+          if (val.riotRegion)
+            setRiotRegionInput(val.riotRegion as SpecificRegion);
+        }
+      });
+    }
 
-    return () => unsubscribe();
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
   }, [editing]);
 
   const handleLogout = () => {
