@@ -17,6 +17,12 @@
       "android": {
         "buildType": "apk"
       }
+    },
+    "apk-store": {
+      "distribution": "store",
+      "android": {
+        "buildType": "apk"
+      }
     }
   },
   "submit": {

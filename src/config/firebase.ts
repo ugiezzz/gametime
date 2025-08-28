@@ -6,7 +6,21 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 
 import { firebaseConfig } from './firebase.config';
 
-const app = initializeApp(firebaseConfig);
+// Initialize Firebase with error handling
+let app;
+try {
+  app = initializeApp(firebaseConfig);
+  console.log('🔧 Firebase app initialized successfully');
+} catch (error: any) {
+  console.error('🔧 Error initializing Firebase app:', error);
+  // If there's already an app initialized, get it
+  if (error.code === 'app/duplicate-app') {
+    app = initializeApp();
+    console.log('🔧 Using existing Firebase app instance');
+  } else {
+    throw error;
+  }
+}
 
 // Import the React Native specific auth module
 // This should work with Firebase v12 for React Native

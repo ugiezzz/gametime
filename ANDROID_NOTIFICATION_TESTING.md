@@ -132,3 +132,4 @@ If you encounter issues:
 3. Check Android notification permissions
 4. Review debug data in Firebase Realtime Database
 
+

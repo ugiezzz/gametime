@@ -3,13 +3,13 @@
 // Used by: firebase.ts and other TypeScript files
 
 export const firebaseConfig = {
-  apiKey: 'AIzaSyCOVHqhturFgeo79MPcGDHiBTZD-ktPwDM',
+  apiKey: 'AIzaSyAElim4NhHkXXtzBxd4macRqwWgUKyz8tw',
   authDomain: 'gametime-app-4e0e3.firebaseapp.com',
   projectId: 'gametime-app-4e0e3',
   storageBucket: 'gametime-app-4e0e3.firebasestorage.app',
   messagingSenderId: '262537480462',
-  appId: '1:262537480462:web:f3f8f46db82a3cb6d06f5f',
-  measurementId: 'G-2R66RZS8C0',
+  appId: '1:262537480462:android:c630d6d8f56d5858d06f5f',
+  measurementId: 'G-WGEBSG7TKE',
   databaseURL: 'https://gametime-app-4e0e3-default-rtdb.firebaseio.com',
 };
 

@@ -34,7 +34,7 @@ export default function PhoneScreen() {
     requestPermissions();
     // Redirect to home if auth is restored while this screen is visible
     const unsubscribe = CustomAuthService.onAuthStateChanged((user) => {
-      if (user) router.replace('/(tabs)');
+      if (user) router.replace('/');
     });
     return () => unsubscribe();
   }, []);
@@ -71,6 +71,12 @@ export default function PhoneScreen() {
       router.push({ pathname: '/auth/otp', params: { phoneNumber: e164 } });
     } catch (error) {
       console.error('Auth error:', error);
+      // Frontend fallback for documented test account so devs can proceed
+      if (e164 === '+15551234567') {
+        Alert.alert('Test Mode', 'Proceeding with test account without sending SMS. Use code 123456.');
+        router.push({ pathname: '/auth/otp', params: { phoneNumber: e164 } });
+        return;
+      }
       Alert.alert('Error', 'Failed to send OTP. Please try again.');
     } finally {
       setLoading(false);

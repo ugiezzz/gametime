@@ -16,6 +16,7 @@ import {
 import { auth, database } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 import { FirebaseGroupService } from '@/services/firebaseGroupService';
+import { NotificationService } from '@/services/notificationService';
 import {
   getSuperRegion,
   resolveSummonerId,
@@ -102,6 +103,7 @@ export default function ProfileScreen() {
   };
 
   const isOwner = phoneNumber === '+972502525177';
+  const isTestAccount = phoneNumber === '+15551234567';
 
   const startEdit = () => {
     setNameInput(displayName || '');
@@ -215,6 +217,32 @@ export default function ProfileScreen() {
       setDebugOutput(lines.join('\n'));
     } catch (e: any) {
       setDebugOutput(`Error: ${e?.message || e}`);
+    }
+  };
+
+  const sendTestNotification = async () => {
+    try {
+      const phone = phoneNumber || '';
+      if (phone !== '+15551234567') {
+        Alert.alert('Unavailable', 'This action is available only for the test account');
+        return;
+      }
+      // Ensure we have a fresh Expo push token saved for this user
+      const token = await NotificationService.registerPushTokenAsync();
+      if (!token) {
+        Alert.alert(
+          'Notifications disabled',
+          'We could not register a push token. Please enable notifications in system settings and try again.',
+        );
+        return;
+      }
+      const message = await CustomAuthService.sendTestNotification(
+        phone,
+        '123456',
+      );
+      Alert.alert('Success', message || 'Test notification sent');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to send test notification');
     }
   };
 
@@ -368,6 +396,22 @@ export default function ProfileScreen() {
           <Ionicons name="chevron-forward" size={20} color="#9CA3AF" />
         </TouchableOpacity>
       </View>
+
+      {isTestAccount && (
+        <View className="mb-6 rounded-lg bg-gray-800 p-4">
+          <Text className="mb-3 text-lg font-bold text-white">
+            Test notification
+          </Text>
+          <TouchableOpacity
+            className="rounded bg-blue-600 p-3"
+            onPress={sendTestNotification}
+          >
+            <Text className="text-center font-semibold text-white">
+              Send Test Notification
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       {isOwner && (
         <View className="mb-6 rounded-lg bg-gray-800 p-4">

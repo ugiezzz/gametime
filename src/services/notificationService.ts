@@ -4,6 +4,13 @@ import { ref, update } from 'firebase/database';
 
 import { auth, database } from '@/config/firebase';
 
+// Ensure Firebase is initialized before proceeding
+const ensureFirebaseInitialized = () => {
+  if (!auth || !database) {
+    throw new Error('Firebase not initialized. Please wait for initialization to complete.');
+  }
+};
+
 export class NotificationService {
   static async requestPermissions() {
     try {
@@ -37,6 +44,9 @@ export class NotificationService {
 
   static async registerPushTokenAsync(): Promise<string | null> {
     try {
+      // Ensure Firebase is initialized
+      ensureFirebaseInitialized();
+      
       const granted = await this.requestPermissions();
       if (!granted) return null;
 

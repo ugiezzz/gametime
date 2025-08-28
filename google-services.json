@@ -8,9 +8,9 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:262537480462:android:a3eaffb638726b5fd06f5f",
+        "mobilesdk_app_id": "1:262537480462:android:c630d6d8f56d5858d06f5f",
         "android_client_info": {
-          "package_name": "com.gametime.app"
+          "package_name": "com.gametimeapp.app"
         }
       },
       "oauth_client": [],

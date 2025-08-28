@@ -23,6 +23,19 @@ export function normalizePhoneNumber(
 ): NormalizedPhone {
   try {
     const raw = (input || '').trim();
+    // Allowlisted test numbers (accept common variants) to simplify QA flows
+    // Current documented test number: +1 555 123 4567
+    const digitsOnly = raw.replace(/\D/g, '');
+    const isAllowlistedTestNumber =
+      digitsOnly === '15551234567' || digitsOnly === '5551234567';
+    if (isAllowlistedTestNumber) {
+      return {
+        e164: '+15551234567',
+        region: 'US',
+        national: '555 123 4567',
+        isValid: true,
+      };
+    }
     if (!raw)
       return {
         e164: null,
