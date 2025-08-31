@@ -1,4 +1,5 @@
 import Constants from 'expo-constants';
+import * as Localization from 'expo-localization';
 import * as Notifications from 'expo-notifications';
 import { ref, update } from 'firebase/database';
 
@@ -7,7 +8,9 @@ import { auth, database } from '@/config/firebase';
 // Ensure Firebase is initialized before proceeding
 const ensureFirebaseInitialized = () => {
   if (!auth || !database) {
-    throw new Error('Firebase not initialized. Please wait for initialization to complete.');
+    throw new Error(
+      'Firebase not initialized. Please wait for initialization to complete.',
+    );
   }
 };
 
@@ -46,7 +49,7 @@ export class NotificationService {
     try {
       // Ensure Firebase is initialized
       ensureFirebaseInitialized();
-      
+
       const granted = await this.requestPermissions();
       if (!granted) return null;
 
@@ -56,10 +59,26 @@ export class NotificationService {
       const { currentUser } = auth;
       if (!currentUser) return token;
 
+      const locales = Localization.getLocales?.() || ([] as any);
+      const primaryLocale = locales[0] || ({} as any);
+      const deviceTimeZoneIANA =
+        (Localization as any)?.timezone ||
+        primaryLocale?.timeZone ||
+        Intl.DateTimeFormat().resolvedOptions().timeZone ||
+        undefined;
+      const deviceLocale =
+        primaryLocale?.languageTag ||
+        (Localization as any)?.locale ||
+        undefined;
+      const deviceUtcOffsetMinutes = new Date().getTimezoneOffset();
+
       const userRef = ref(database, `users/${currentUser.uid}`);
       await update(userRef, {
         expoPushToken: token,
         expoPushTokenUpdatedAt: new Date().toISOString(),
+        deviceTimeZoneIANA: deviceTimeZoneIANA || null,
+        deviceUtcOffsetMinutes,
+        deviceLocale: deviceLocale || null,
       });
       return token;
     } catch (error) {

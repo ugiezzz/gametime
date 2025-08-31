@@ -5,10 +5,20 @@ import * as Notifications from 'expo-notifications';
 import { router, Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { TouchableOpacity, View, Text } from 'react-native';
+import { Text, TouchableOpacity, View } from 'react-native';
 
 import { NotificationService } from '@/services/notificationService';
-import { TimeService } from '@/services/timeService';
+
+function BackButton() {
+  return (
+    <TouchableOpacity
+      onPress={() => router.back()}
+      style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+    >
+      <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
+    </TouchableOpacity>
+  );
+}
 
 // Configure notifications
 Notifications.setNotificationHandler({
@@ -27,75 +37,25 @@ export default function Layout() {
 
   useEffect(() => {
     // Set up notification listeners
-    const subscription = Notifications.addNotificationReceivedListener(
-      (notification) => {
-        // Handle different notification types with local time formatting
-        const data = notification.request.content.data as any;
-        
-        if (data?.type === 'ping' && data?.scheduledAtMs) {
-          // Original ping notification
-          try {
-            const creatorName = notification.request.content.body?.split(' start playing')[0] || 'Someone';
-            const localTimeBody = TimeService.formatNotificationTime(data.scheduledAtMs, creatorName);
-            
-            // Create a new notification object instead of modifying the parameter
-            const updatedNotification = {
-              ...notification,
-              request: {
-                ...notification.request,
-                content: {
-                  ...notification.request.content,
-                  body: localTimeBody,
-                },
-              },
-            };
-            // Note: We can't actually update the notification content in the listener
-            // This is just for demonstration of avoiding parameter mutation
-          } catch (error) {
-            // Silently handle errors to avoid console statements
-          }
-        } else if (data?.type === 'ping_response' && data?.selectedTimeMs) {
-          // Ping response notification
-          try {
-            const responderName = notification.request.content.body?.split(' would love to join')[0] || 'Someone';
-            const localTime = TimeService.formatLocalTime(data.selectedTimeMs);
-            const localTimeBody = `${responderName} would love to join at ${localTime}`;
-            
-            // Create a new notification object instead of modifying the parameter
-            const updatedNotification = {
-              ...notification,
-              request: {
-                ...notification.request,
-                content: {
-                  ...notification.request.content,
-                  body: localTimeBody,
-                },
-              },
-            };
-            // Note: We can't actually update the notification content in the listener
-            // This is just for demonstration of avoiding parameter mutation
-          } catch (error) {
-            // Silently handle errors to avoid console statements
-          }
-        }
-      },
-    );
+    const subscription = Notifications.addNotificationReceivedListener(() => {
+      // No mutation: server now sends localized text in body and raw timestamps in data
+      // We rely on navigation handling only
+    });
 
     const responseSubscription =
       Notifications.addNotificationResponseReceivedListener((response) => {
         try {
           const data: any = response.notification.request.content.data || {};
-          
+
           // Handle both ping and ping_response notifications - both navigate to group
           if (data.groupId) {
             router.push(`/group/${data.groupId}` as any);
             return;
           }
-          
+
           // Fallback route handling
           if (data.route && typeof data.route === 'string') {
             router.push(data.route as any);
-            return;
           }
         } catch {
           // Silently handle errors
@@ -111,7 +71,7 @@ export default function Layout() {
     const handleDeepLink = (url: string) => {
       // Parse the URL to extract token for join links
       const parsedUrl = Linking.parse(url);
-      
+
       if (parsedUrl.path === '/join' && parsedUrl.queryParams?.token) {
         const token = parsedUrl.queryParams.token as string;
         router.push(`/join?token=${encodeURIComponent(token)}`);
@@ -139,7 +99,14 @@ export default function Layout() {
 
   if (!fontsLoaded) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#333333' }}>
+      <View
+        style={{
+          flex: 1,
+          justifyContent: 'center',
+          alignItems: 'center',
+          backgroundColor: '#333333',
+        }}
+      >
         <Text style={{ color: '#FFFFFF' }}>Loading...</Text>
       </View>
     );
@@ -147,6 +114,7 @@ export default function Layout() {
 
   return (
     <>
+      {/* eslint-disable-next-line react/style-prop-object */}
       <StatusBar style="light" backgroundColor="#333333" />
       <Stack
         screenOptions={{
@@ -157,14 +125,7 @@ export default function Layout() {
           headerTitleStyle: {
             fontWeight: 'bold',
           },
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-            >
-              <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
-            </TouchableOpacity>
-          ),
+          headerLeft: BackButton,
           contentStyle: {
             backgroundColor: '#333333',
           },

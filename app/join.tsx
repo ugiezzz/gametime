@@ -1,40 +1,42 @@
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import React, { useEffect, useState } from 'react';
-import {
-  Alert,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { useEffect, useState } from 'react';
+import { Alert, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { joinGroupViaLink } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 
+function JoinBackButton() {
+  return (
+    <TouchableOpacity
+      onPress={() => router.back()}
+      style={{ paddingHorizontal: 8, paddingVertical: 4 }}
+    >
+      <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
+    </TouchableOpacity>
+  );
+}
+
 export default function JoinScreen() {
   const { token } = useLocalSearchParams();
   const [loading, setLoading] = useState(false);
-  const [groupName, setGroupName] = useState<string>('');
+  const [groupName] = useState<string>('');
 
   useEffect(() => {
     // If user is not authenticated, redirect to auth first
     if (!CustomAuthService.isAuthenticated()) {
-      Alert.alert(
-        'Sign In Required',
-        'You need to sign in to join a group.',
-        [
-          {
-            text: 'Sign In',
-            onPress: () => router.replace('/auth/phone'),
-          },
-          {
-            text: 'Cancel',
-            style: 'cancel',
-            onPress: () => router.back(),
-          },
-        ]
-      );
+      Alert.alert('Sign In Required', 'You need to sign in to join a group.', [
+        {
+          text: 'Sign In',
+          onPress: () => router.replace('/auth/phone'),
+        },
+        {
+          text: 'Cancel',
+          style: 'cancel',
+          onPress: () => router.back(),
+        },
+      ]);
     }
   }, []);
 
@@ -47,7 +49,11 @@ export default function JoinScreen() {
     setLoading(true);
     try {
       const result = await joinGroupViaLink({ token });
-      const data = result.data as { success: boolean; groupId: string; message?: string };
+      const data = result.data as {
+        success: boolean;
+        groupId: string;
+        message?: string;
+      };
       const { success, groupId, message } = data;
 
       if (success) {
@@ -59,12 +65,12 @@ export default function JoinScreen() {
               text: 'View Group',
               onPress: () => router.replace(`/group/${groupId}`),
             },
-          ]
+          ],
         );
       }
     } catch (error: any) {
       let errorMessage = 'Failed to join group';
-      
+
       if (error?.message?.includes('expired')) {
         errorMessage = 'This invite link has expired';
       } else if (error?.message?.includes('Invalid')) {
@@ -116,26 +122,19 @@ export default function JoinScreen() {
           headerTitle: 'Join Group',
           headerStyle: { backgroundColor: '#111827' },
           headerTintColor: '#E5E7EB',
-          headerLeft: () => (
-            <TouchableOpacity
-              onPress={() => router.back()}
-              style={{ paddingHorizontal: 8, paddingVertical: 4 }}
-            >
-              <Ionicons name="chevron-back" size={24} color="#9CA3AF" />
-            </TouchableOpacity>
-          ),
+          headerLeft: JoinBackButton,
         }}
       />
-      
+
       <View className="flex-1 items-center justify-center px-6">
         <Ionicons name="people" size={64} color="#3B82F6" />
-        
+
         <Text className="mt-6 text-center text-xl font-semibold text-white">
           Join Group Invitation
         </Text>
-        
+
         <Text className="mt-2 text-center text-gray-400">
-          You've been invited to join a GameTime group!
+          You&apos;ve been invited to join a GameTime group!
         </Text>
 
         {groupName && (

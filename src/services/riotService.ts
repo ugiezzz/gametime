@@ -1,3 +1,9 @@
+// Import cloud functions
+import {
+  getActiveGameStatus as getActiveGameStatusCF,
+  resolveSummonerId as resolveSummonerIdCF,
+} from '@/config/firebase';
+
 export type SpecificRegion =
   | 'BR1'
   | 'EUN1'
@@ -43,20 +49,18 @@ const REGION_TO_SUPER: Record<SpecificRegion, SuperRegion> = {
 };
 
 // Legacy configuration - no longer needed with cloud functions
-let config: RiotConfig | null = null;
+// Legacy: keep type for backward compatibility, but do not store config
 
 // Legacy function - kept for backward compatibility but not required
-export function configureRiotService(newConfig: RiotConfig) {
-  config = newConfig;
-  console.log('⚠️ configureRiotService is deprecated. Riot API calls now use secure cloud functions.');
+export function configureRiotService(_newConfig: RiotConfig) {
+  console.log(
+    '⚠️ configureRiotService is deprecated. Riot API calls now use secure cloud functions.',
+  );
 }
 
 export function getSuperRegion(from: SpecificRegion): SuperRegion {
   return REGION_TO_SUPER[from];
 }
-
-// Import cloud functions
-import { resolveSummonerId as resolveSummonerIdCF, getActiveGameStatus as getActiveGameStatusCF } from '@/config/firebase';
 
 export function parseRiotId(
   riotId: string,
@@ -76,13 +80,11 @@ export async function resolveSummonerId(
 ): Promise<{ puuid: string; summonerId: string }> {
   try {
     const result = await resolveSummonerIdCF({ riotId, region });
-    return {
-      puuid: result.data.puuid,
-      summonerId: result.data.summonerId,
-    };
+    const data = result.data as { puuid: string; summonerId: string };
+    return { puuid: data.puuid, summonerId: data.summonerId };
   } catch (error: any) {
     console.error('Riot API error:', error);
-    
+
     // Handle Firebase Functions errors
     if (error?.code === 'functions/not-found') {
       throw new Error('Summoner not found');
@@ -96,7 +98,7 @@ export async function resolveSummonerId(
     if (error?.code === 'functions/unauthenticated') {
       throw new Error('You must be signed in to use this feature');
     }
-    
+
     throw new Error(error?.message || 'Failed to resolve summoner ID');
   }
 }
@@ -104,13 +106,23 @@ export async function resolveSummonerId(
 export async function getActiveGameStatus(
   puuid: string,
   region: SpecificRegion,
-): Promise<{ inGame: boolean; elapsedMinutes?: number; gameMode?: string; gameType?: string }> {
+): Promise<{
+  inGame: boolean;
+  elapsedMinutes?: number;
+  gameMode?: string;
+  gameType?: string;
+}> {
   try {
     const result = await getActiveGameStatusCF({ puuid, region });
-    return result.data;
+    return result.data as {
+      inGame: boolean;
+      elapsedMinutes?: number;
+      gameMode?: string;
+      gameType?: string;
+    };
   } catch (error: any) {
     console.error('Riot API error:', error);
-    
+
     // Handle Firebase Functions errors
     if (error?.code === 'functions/permission-denied') {
       throw new Error('API key invalid or expired');
@@ -121,7 +133,7 @@ export async function getActiveGameStatus(
     if (error?.code === 'functions/unauthenticated') {
       throw new Error('You must be signed in to use this feature');
     }
-    
+
     throw new Error(error?.message || 'Failed to get game status');
   }
 }
