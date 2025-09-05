@@ -12,10 +12,12 @@ import {
   Text,
   TouchableOpacity,
   View,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auth, database, generateInviteLink } from '@/config/firebase';
+import { auth, database, generateInviteLink, sendNextGameNotification } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 import type { Group, Ping } from '@/services/firebaseGroupService';
 // import { NotificationService } from '@/services/notificationService';
@@ -30,6 +32,7 @@ export default function GroupDetailScreen() {
   const [group, setGroup] = useState<Group | null>(null);
   const [pings, setPings] = useState<Ping[]>([]);
   const [loading, setLoading] = useState(true);
+  const [focusTick, setFocusTick] = useState(0);
 
   useEffect(() => {
     if (!CustomAuthService.isAuthenticated()) {
@@ -46,6 +49,24 @@ export default function GroupDetailScreen() {
     );
     return () => {
       unsub && unsub();
+    };
+  }, [id]);
+
+  // Refresh when app returns to foreground
+  useEffect(() => {
+    const appState = React.useRef<AppStateStatus>(AppState.currentState);
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (
+        (appState.current === 'background' || appState.current === 'inactive') &&
+        nextState === 'active'
+      ) {
+        loadGroup();
+        setFocusTick((t) => t + 1);
+      }
+      appState.current = nextState as AppStateStatus;
+    });
+    return () => {
+      sub.remove();
     };
   }, [id]);
 
@@ -136,7 +157,7 @@ export default function GroupDetailScreen() {
         {/* Currently Playing Card */}
         {group.game === 'League of Legends' && (
           <View className="px-6 pb-4">
-            <CurrentlyPlayingCard group={group} />
+            <CurrentlyPlayingCard group={group} focusTick={focusTick} />
           </View>
         )}
 
@@ -146,6 +167,7 @@ export default function GroupDetailScreen() {
             onSend={async (scheduledAtMs) => {
               await handlePing(scheduledAtMs);
             }}
+            focusTick={focusTick}
           />
         </View>
 
@@ -304,6 +326,7 @@ function PingCard({
 
   const meSelected = viewerUid ? !!responses[viewerUid] : false;
   // const selectedCount = selectedTargets.length;
+  const selectedCount = selectedTargets.length;
   const earliestSelectedMs =
     selectedTargets.length > 0 ? Math.min(...selectedTargets) : baseTimeMs;
   const earliestSelectedLabel = TimeService.formatLocalTime(earliestSelectedMs);
@@ -316,6 +339,11 @@ function PingCard({
     meSelected || viewerUid === ping.createdBy
       ? 'Change start time'
       : 'Will you join?';
+
+  // Hide card if no one selected a concrete time
+  if (selectedCount === 0) {
+    return null;
+  }
 
   return (
     <View className="mb-3 rounded-lg bg-gray-800 p-4">
@@ -333,7 +361,9 @@ function PingCard({
         className="mt-2 text-xl font-extrabold text-white"
         numberOfLines={2}
       >
-        {earliestNames.length > 0
+        {selectedCount === 1 && earliestNames.length > 0
+          ? `${earliestNames[0]} suggest playing at ${earliestSelectedLabel}`
+          : earliestNames.length > 0
           ? `${earliestNames.join(', ')} start playing at ${earliestSelectedLabel}`
           : `Start playing at ${earliestSelectedLabel}`}
       </Text>
@@ -547,119 +577,143 @@ function HeaderTitle({ group }: { group: Group }) {
 // Scheduling widget for PING
 function SchedulePing({
   onSend,
+  focusTick,
 }: {
   onSend: (scheduledAtMs?: number) => Promise<void>;
+  focusTick: number;
 }) {
   const [time, setTime] = React.useState<Date>(TimeService.getNextRounded10Minutes());
+  React.useEffect(() => {
+    // Reset to next rounded time on focus
+    setTime(TimeService.getNextRounded10Minutes());
+  }, [focusTick]);
 
-  const incHour = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours() + 1,
-          t.getMinutes(),
-          0,
-          0,
-        ),
-    );
-  const decHour = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours() - 1,
-          t.getMinutes(),
-          0,
-          0,
-        ),
-    );
-  const incMin = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours(),
-          t.getMinutes() + 10,
-          0,
-          0,
-        ),
-    );
-  const decMin = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours(),
-          t.getMinutes() - 10,
-          0,
-          0,
-        ),
-    );
-
-  // label kept for possible future preview text
-  const send = () => onSend(time.getTime());
+  const isPast = time.getTime() <= Date.now();
+  const send = () => {
+    if (isPast) return;
+    onSend(time.getTime());
+  };
 
   return (
     <View className="rounded-lg bg-blue-600 p-4">
       <View className="flex-row items-center justify-between">
         {/* Left block: Icon/Title and Send button */}
-        <View className="flex-1 items-center justify-center pr-4">
-          <View className="mb-3 flex-row items-center justify-center">
-            <Ionicons name="game-controller" size={32} color="white" />
-            <Text className="ml-2 text-xl font-bold text-white">PING</Text>
+        <View className="flex-1 justify-center pr-4">
+          <View className="mb-3 flex-row items-center">
+            <Ionicons name="time" size={20} color="white" />
+            <Text className="ml-2 text-lg font-semibold text-white">Suggest a playtime</Text>
           </View>
           <TouchableOpacity
-            className="items-center rounded bg-white px-6 py-3"
+            className={`items-center rounded px-6 py-3 ${isPast ? 'bg-white/40' : 'bg-white'}`}
             onPress={send}
+            disabled={isPast}
           >
             <Text className="font-semibold text-blue-700">Send</Text>
           </TouchableOpacity>
+          {isPast && (
+            <Text className="mt-2 text-center text-xs text-white/90">
+              Select a future time to enable Send
+            </Text>
+          )}
         </View>
 
         {/* Right block: time pickers */}
         <View className="flex-row items-center">
           <View className="mx-4 items-center">
             <TouchableOpacity
-              onPress={incHour}
-              className="mb-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours() + 1,
+                    t.getMinutes(),
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mb-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-up" size={18} color="white" />
+              <Ionicons name="chevron-up" size={20} color="#1D4ED8" />
             </TouchableOpacity>
-            <Text className="my-1 text-2xl font-semibold text-white">
-              {String(time.getHours()).padStart(2, '0')}
-            </Text>
+            <View className="my-1 w-12 items-center">
+              <Text
+                className="text-2xl font-semibold text-white"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {String(time.getHours()).padStart(2, '0')}
+              </Text>
+            </View>
             <TouchableOpacity
-              onPress={decHour}
-              className="mt-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours() - 1,
+                    t.getMinutes(),
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mt-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-down" size={18} color="white" />
+              <Ionicons name="chevron-down" size={20} color="#1D4ED8" />
             </TouchableOpacity>
           </View>
           <Text className="text-2xl font-bold text-white">:</Text>
           <View className="mx-4 items-center">
             <TouchableOpacity
-              onPress={incMin}
-              className="mb-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours(),
+                    t.getMinutes() + 10,
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mb-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-up" size={18} color="white" />
+              <Ionicons name="chevron-up" size={20} color="#1D4ED8" />
             </TouchableOpacity>
-            <Text className="my-1 text-2xl font-semibold text-white">
-              {String(time.getMinutes()).padStart(2, '0')}
-            </Text>
+            <View className="my-1 w-12 items-center">
+              <Text
+                className="text-2xl font-semibold text-white"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {String(time.getMinutes()).padStart(2, '0')}
+              </Text>
+            </View>
             <TouchableOpacity
-              onPress={decMin}
-              className="mt-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours(),
+                    t.getMinutes() - 10,
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mt-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-down" size={18} color="white" />
+              <Ionicons name="chevron-down" size={20} color="#1D4ED8" />
             </TouchableOpacity>
           </View>
         </View>
@@ -679,7 +733,7 @@ function formatElapsedTime(elapsedMinutes: number): string {
 }
 
 // Currently Playing Card Component
-function CurrentlyPlayingCard({ group }: { group: Group }) {
+function CurrentlyPlayingCard({ group, focusTick }: { group: Group; focusTick: number }) {
   const [playingMembers, setPlayingMembers] = React.useState<
     Array<{ uid: string; name: string; elapsedMinutes: number }>
   >([]);
@@ -759,12 +813,23 @@ function CurrentlyPlayingCard({ group }: { group: Group }) {
       cancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [group.game, group.membersByUid]);
+  }, [group.game, group.membersByUid, focusTick]);
 
   // Don't render if no one is playing
   if (playingMembers.length === 0) {
     return null;
   }
+
+  const currentUid = auth.currentUser?.uid;
+
+  const handleSendNextGame = async (targetUid: string) => {
+    try {
+      await sendNextGameNotification({ groupId: group.id, targetUid });
+      Alert.alert('Sent', 'Request sent');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to send');
+    }
+  };
 
   return (
     <View className="rounded-lg bg-purple-800 p-4">
@@ -780,9 +845,16 @@ function CurrentlyPlayingCard({ group }: { group: Group }) {
           <Text className="flex-1 text-base text-white">
             {member.name}
           </Text>
-          <Text className="text-sm text-purple-300">
+          <Text className="mr-2 text-sm text-purple-300">
             Playing for: {formatElapsedTime(member.elapsedMinutes)}
           </Text>
+          <TouchableOpacity
+            className="rounded bg-blue-600 px-3 py-2 active:opacity-80"
+            disabled={currentUid === member.uid}
+            onPress={() => handleSendNextGame(member.uid)}
+          >
+            <Text className="text-xs font-semibold text-white">cmttng</Text>
+          </TouchableOpacity>
         </View>
       ))}
     </View>
