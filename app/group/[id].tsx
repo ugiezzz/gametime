@@ -33,6 +33,8 @@ export default function GroupDetailScreen() {
   const [pings, setPings] = useState<Ping[]>([]);
   const [loading, setLoading] = useState(true);
   const [focusTick, setFocusTick] = useState(0);
+  const [memberNames, setMemberNames] = useState<Map<string, string>>(new Map());
+  const appState = React.useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     if (!CustomAuthService.isAuthenticated()) {
@@ -54,7 +56,6 @@ export default function GroupDetailScreen() {
 
   // Refresh when app returns to foreground
   useEffect(() => {
-    const appState = React.useRef<AppStateStatus>(AppState.currentState);
     const sub = AppState.addEventListener('change', (nextState) => {
       if (
         (appState.current === 'background' || appState.current === 'inactive') &&
@@ -75,6 +76,7 @@ export default function GroupDetailScreen() {
       const foundGroup = await FirebaseGroupService.getGroup(id as string);
       if (foundGroup) {
         setGroup(foundGroup);
+        await loadMemberNames(foundGroup);
       } else {
         Alert.alert('Error', 'Group not found');
         router.back();
@@ -85,6 +87,61 @@ export default function GroupDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMemberNames = async (groupData: Group) => {
+    const names = new Map<string, string>();
+    const currentUid = auth.currentUser?.uid;
+    
+    // Add current user
+    if (currentUid) {
+      names.set(currentUid, 'You');
+    }
+    
+    // Add names from deprecated members list if available
+    if (Array.isArray(groupData.members)) {
+      for (const member of groupData.members) {
+        if (member.name) {
+          names.set(member.id, member.name);
+        }
+      }
+    }
+    
+    // Get all unique UIDs that might need names
+    const allUids = new Set<string>();
+    
+    // Add UIDs from group members
+    const memberUidsFromGroup = Array.isArray(groupData.members) && groupData.members.length > 0
+      ? groupData.members.map((m) => m.id)
+      : Object.keys(groupData.membersByUid || {});
+    
+    memberUidsFromGroup.forEach(uid => allUids.add(uid));
+    
+    // Add UIDs from ping responses
+    for (const ping of pings) {
+      if (ping.responses) {
+        Object.keys(ping.responses).forEach(uid => allUids.add(uid));
+      }
+    }
+    
+    // Fetch missing names from database
+    for (const uid of allUids) {
+      if (!names.has(uid)) {
+        try {
+          const snap = await get(ref(database, `users/${uid}/displayName`));
+          if (snap.exists()) {
+            const name = String(snap.val());
+            if (name && name.trim().length > 0) {
+              names.set(uid, name);
+            }
+          }
+        } catch {
+          // Ignore errors, will use fallback
+        }
+      }
+    }
+    
+    setMemberNames(names);
   };
 
   const subscribeToGroup = () => {
@@ -137,7 +194,7 @@ export default function GroupDetailScreen() {
     <SafeAreaView className="flex-1 bg-gray-900">
       <Stack.Screen
         options={{
-          headerTitle: () => (group ? <HeaderTitle group={group} /> : null),
+           headerTitle: () => (group ? <HeaderTitle group={group} memberNames={memberNames} /> : null),
           headerLeft: () => (
             <TouchableOpacity
               onPress={() => router.back()}
@@ -156,9 +213,9 @@ export default function GroupDetailScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Currently Playing Card */}
         {group.game === 'League of Legends' && (
-          <View className="px-6 pb-4">
-            <CurrentlyPlayingCard group={group} focusTick={focusTick} />
-          </View>
+           <View className="px-6 pb-4">
+             <CurrentlyPlayingCard group={group} focusTick={focusTick} memberNames={memberNames} />
+           </View>
         )}
 
         {/* Ping Button */}
@@ -178,14 +235,15 @@ export default function GroupDetailScreen() {
               <Text className="mb-2 text-lg font-semibold text-white">
                 Active Pings
               </Text>
-              {pings.map((ping) => (
-                <PingCard
-                  key={ping.id}
-                  ping={ping}
-                  group={group}
-                  groupId={group.id}
-                />
-              ))}
+               {pings.map((ping) => (
+                 <PingCard
+                   key={ping.id}
+                   ping={ping}
+                   group={group}
+                   groupId={group.id}
+                   memberNames={memberNames}
+                 />
+               ))}
             </>
           )}
         </View>
@@ -215,10 +273,12 @@ function PingCard({
   ping,
   group,
   groupId,
+  memberNames,
 }: {
   ping: any;
   group: Group;
   groupId: string;
+  memberNames: Map<string, string>;
 }) {
   const createdAt = ping.createdAtMs as number;
   // Use scheduled time if present; else fall back to createdAt
@@ -237,53 +297,17 @@ function PingCard({
   const nextRound: string[] = [];
   const declined: string[] = [];
   const pending: string[] = [];
-  const uidToName = new Map<string, string>();
-  
-  // Populate names from deprecated members list if available
-  for (const m of group.members ?? []) uidToName.set(m.id, m.name);
   
   const viewerUid = auth.currentUser?.uid;
-  if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
 
   const memberUidsFromGroup =
     Array.isArray(group.members) && group.members.length > 0
       ? group.members.map((m) => m.id)
       : Object.keys(group.membersByUid || {});
-  const allUids = new Set<string>([
+  const allUids = [...new Set([
     ...Object.keys(responses),
     ...memberUidsFromGroup,
-  ]);
-  
-  // For users without names in the map, try to fetch from database or use fallback
-  const [memberNames, setMemberNames] = React.useState<Map<string, string>>(uidToName);
-  
-  React.useEffect(() => {
-    const loadMissingNames = async () => {
-      const updatedNames = new Map(uidToName);
-      let hasUpdates = false;
-      
-      for (const uid of allUids) {
-        if (!updatedNames.has(uid)) {
-          try {
-            const snap = await get(ref(database, `users/${uid}/displayName`));
-            if (snap.exists()) {
-              const name = String(snap.val());
-              if (name && name.trim().length > 0) {
-                updatedNames.set(uid, name);
-                hasUpdates = true;
-              }
-            }
-          } catch {}
-        }
-      }
-      
-      if (hasUpdates) {
-        setMemberNames(updatedNames);
-      }
-    };
-    
-    loadMissingNames();
-  }, [ping.id, allUids.size]);
+  ])];
 
   const selectedTargets: number[] = [];
   for (const uid of allUids) {
@@ -370,20 +394,18 @@ function PingCard({
 
       {/* Gathering time */}
       <View className="mb-3">
-        {sorted.length > 0 && (
-          <View className="mb-2 mt-3">
-            {sorted.map(([timeLabel, names]: [string, string[]]) => (
-              <View key={timeLabel} className="mb-1 flex-row items-center">
-                <Text className="mr-2 text-base font-semibold text-white">
-                  {timeLabel}
-                </Text>
-                <Text className="text-sm text-gray-300">
-                  {names.join(', ')}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
+        <View className="mb-2 mt-3">
+          {sorted.map(([timeLabel, names]: [string, string[]]) => (
+            <View key={timeLabel} className="mb-1 flex-row items-center">
+              <Text className="mr-2 text-base font-semibold text-white">
+                {timeLabel}
+              </Text>
+              <Text className="text-sm text-gray-300">
+                {names.join(', ')}
+              </Text>
+            </View>
+          ))}
+        </View>
         {nextRound.length > 0 && (
           <View className="mb-1 flex-row items-center">
             <Text className="mr-2 text-sm font-semibold text-purple-400">
@@ -498,58 +520,27 @@ function TextButton({
   );
 }
 
-function HeaderTitle({ group }: { group: Group }) {
-  const [members, setMembers] = React.useState<
-    Array<{ uid: string; name: string }>
-  >([]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const loadNames = async () => {
-      // Prefer deprecated display list if present (older groups)
-      const displayList = Array.isArray(group.members)
-        ? group.members
-            .map((m) => ({ uid: m.id, name: m.name }))
-            .filter((m) => !!m.name)
-        : [];
-      if (displayList.length > 0) {
-        if (!cancelled) setMembers(displayList);
-        return;
+function HeaderTitle({ group, memberNames }: { group: Group; memberNames: Map<string, string> }) {
+  // Get member list from memberNames
+  const members: Array<{ uid: string; name: string }> = [];
+  
+  // Prefer deprecated display list if present (older groups)
+  if (Array.isArray(group.members) && group.members.length > 0) {
+    for (const member of group.members) {
+      if (member.name) {
+        members.push({ uid: member.id, name: member.name });
       }
-
-      const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
-      if (uids.length === 0) {
-        if (!cancelled) setMembers([]);
-        return;
+    }
+  } else {
+    // Use membersByUid with resolved names
+    const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
+    for (const uid of uids) {
+      const name = memberNames.get(uid);
+      if (name) {
+        members.push({ uid, name });
       }
-
-      const currentUid = auth.currentUser?.uid;
-      const resolved: Array<{ uid: string; name: string }> = [];
-      for (const uid of uids) {
-        if (uid === currentUid) {
-          resolved.push({ uid, name: 'You' });
-          continue;
-        }
-        try {
-          const snap = await get(ref(database, `users/${uid}/displayName`));
-          if (snap.exists()) {
-            const name = String(snap.val());
-            if (name && name.trim().length > 0) {
-              resolved.push({ uid, name });
-            }
-          }
-        } catch {}
-      }
-      if (!cancelled) setMembers(resolved);
-    };
-
-    loadNames();
-    return () => {
-      cancelled = true;
-    };
-  }, [group.members, group.membersByUid]);
-
-  // Note: Riot game status polling is now handled by the CurrentlyPlayingCard component
+    }
+  }
 
   const fallbackCount = (group.members?.length ??
     (group.membersByUid
@@ -733,7 +724,7 @@ function formatElapsedTime(elapsedMinutes: number): string {
 }
 
 // Currently Playing Card Component
-function CurrentlyPlayingCard({ group, focusTick }: { group: Group; focusTick: number }) {
+function CurrentlyPlayingCard({ group, focusTick, memberNames }: { group: Group; focusTick: number; memberNames: Map<string, string> }) {
   const [playingMembers, setPlayingMembers] = React.useState<
     Array<{ uid: string; name: string; elapsedMinutes: number }>
   >([]);
@@ -764,30 +755,16 @@ function CurrentlyPlayingCard({ group, focusTick }: { group: Group; focusTick: n
           // Check game status
           try {
             const res = await getActiveGameStatus(puuid, region as any);
-            if (res.inGame && typeof res.elapsedMinutes === 'number') {
-              // Get user's display name
-              let name = 'Unknown User';
-              const currentUid = auth.currentUser?.uid;
-              if (uid === currentUid) {
-                name = 'You';
-              } else {
-                try {
-                  const nameSnap = await get(ref(database, `users/${uid}/displayName`));
-                  if (nameSnap.exists()) {
-                    const displayName = String(nameSnap.val());
-                    if (displayName && displayName.trim().length > 0) {
-                      name = displayName;
-                    }
-                  }
-                } catch {}
-              }
-              
-              playing.push({
-                uid,
-                name,
-                elapsedMinutes: res.elapsedMinutes
-              });
-            }
+             if (res.inGame && typeof res.elapsedMinutes === 'number') {
+               // Get user's display name from memberNames
+               const name = memberNames.get(uid) || 'Unknown User';
+               
+               playing.push({
+                 uid,
+                 name,
+                 elapsedMinutes: res.elapsedMinutes
+               });
+             }
           } catch (error) {
             // Silently handle individual player errors
             console.log(`Failed to get game status for ${uid}:`, error);
@@ -813,7 +790,7 @@ function CurrentlyPlayingCard({ group, focusTick }: { group: Group; focusTick: n
       cancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [group.game, group.membersByUid, focusTick]);
+  }, [group.game, Object.keys(group.membersByUid || {}).sort().join(','), focusTick]);
 
   // Don't render if no one is playing
   if (playingMembers.length === 0) {
