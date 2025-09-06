@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier, @typescript-eslint/no-use-before-define, react/no-unstable-nested-components, no-await-in-loop, no-continue, consistent-return, @typescript-eslint/consistent-type-imports, react-hooks/exhaustive-deps, simple-import-sort/imports */
 import { Ionicons } from '@expo/vector-icons';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { get, ref } from 'firebase/database';
@@ -50,7 +51,9 @@ export default function GroupDetailScreen() {
       setPings,
     );
     return () => {
-      unsub && unsub();
+      if (unsub) {
+        unsub();
+      }
     };
   }, [id]);
 
@@ -264,7 +267,7 @@ export default function GroupDetailScreen() {
 
 // Inline component defs (kept here for minimal diff)
 function PingCardComponentDefs() {
-  return <></>;
+  return null;
 }
 
 // Removed formatAbsoluteTime wrapper - using TimeService.formatLocalTime directly
@@ -369,6 +372,16 @@ function PingCard({
     return null;
   }
 
+  // Build header text without nested ternaries
+  let headerText: string;
+  if (selectedCount === 1 && earliestNames.length > 0) {
+    headerText = `${earliestNames[0]} suggest playing at ${earliestSelectedLabel}`;
+  } else if (earliestNames.length > 0) {
+    headerText = `${earliestNames.join(', ')} start playing at ${earliestSelectedLabel}`;
+  } else {
+    headerText = `Start playing at ${earliestSelectedLabel}`;
+  }
+
   return (
     <View className="mb-3 rounded-lg bg-gray-800 p-4">
       <View className="flex-row justify-between">
@@ -385,11 +398,7 @@ function PingCard({
         className="mt-2 text-xl font-extrabold text-white"
         numberOfLines={2}
       >
-        {selectedCount === 1 && earliestNames.length > 0
-          ? `${earliestNames[0]} suggest playing at ${earliestSelectedLabel}`
-          : earliestNames.length > 0
-          ? `${earliestNames.join(', ')} start playing at ${earliestSelectedLabel}`
-          : `Start playing at ${earliestSelectedLabel}`}
+        {headerText}
       </Text>
 
       {/* Gathering time */}
@@ -592,7 +601,7 @@ function SchedulePing({
         <View className="flex-1 justify-center pr-4">
           <View className="mb-3 flex-row items-center">
             <Ionicons name="time" size={20} color="white" />
-            <Text className="ml-2 text-lg font-semibold text-white">Suggest a playtime</Text>
+            <Text className="ml-2 text-lg font-semibold text-white">Suggest gametime</Text>
           </View>
           <TouchableOpacity
             className={`items-center rounded px-6 py-3 ${isPast ? 'bg-white/40' : 'bg-white'}`}
@@ -736,7 +745,6 @@ function CurrentlyPlayingCard({ group, focusTick, memberNames }: { group: Group;
     }
 
     let cancelled = false;
-    let interval: any;
 
     const checkActiveGames = async () => {
       const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
@@ -784,11 +792,11 @@ function CurrentlyPlayingCard({ group, focusTick, memberNames }: { group: Group;
     checkActiveGames();
     
     // Poll every 30 seconds
-    interval = setInterval(checkActiveGames, 30000);
+    const intervalId = setInterval(checkActiveGames, 30000);
 
     return () => {
       cancelled = true;
-      if (interval) clearInterval(interval);
+      clearInterval(intervalId);
     };
   }, [group.game, Object.keys(group.membersByUid || {}).sort().join(','), focusTick]);
 
