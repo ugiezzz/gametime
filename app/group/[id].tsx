@@ -12,10 +12,12 @@ import {
   Text,
   TouchableOpacity,
   View,
+  AppState,
+  AppStateStatus,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import { auth, database, generateInviteLink } from '@/config/firebase';
+import { auth, database, generateInviteLink, sendNextGameNotification } from '@/config/firebase';
 import { CustomAuthService } from '@/services/customAuthService';
 import type { Group, Ping } from '@/services/firebaseGroupService';
 // import { NotificationService } from '@/services/notificationService';
@@ -30,6 +32,9 @@ export default function GroupDetailScreen() {
   const [group, setGroup] = useState<Group | null>(null);
   const [pings, setPings] = useState<Ping[]>([]);
   const [loading, setLoading] = useState(true);
+  const [focusTick, setFocusTick] = useState(0);
+  const [memberNames, setMemberNames] = useState<Map<string, string>>(new Map());
+  const appState = React.useRef<AppStateStatus>(AppState.currentState);
 
   useEffect(() => {
     if (!CustomAuthService.isAuthenticated()) {
@@ -49,11 +54,29 @@ export default function GroupDetailScreen() {
     };
   }, [id]);
 
+  // Refresh when app returns to foreground
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (
+        (appState.current === 'background' || appState.current === 'inactive') &&
+        nextState === 'active'
+      ) {
+        loadGroup();
+        setFocusTick((t) => t + 1);
+      }
+      appState.current = nextState as AppStateStatus;
+    });
+    return () => {
+      sub.remove();
+    };
+  }, [id]);
+
   const loadGroup = async () => {
     try {
       const foundGroup = await FirebaseGroupService.getGroup(id as string);
       if (foundGroup) {
         setGroup(foundGroup);
+        await loadMemberNames(foundGroup);
       } else {
         Alert.alert('Error', 'Group not found');
         router.back();
@@ -64,6 +87,61 @@ export default function GroupDetailScreen() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadMemberNames = async (groupData: Group) => {
+    const names = new Map<string, string>();
+    const currentUid = auth.currentUser?.uid;
+    
+    // Add current user
+    if (currentUid) {
+      names.set(currentUid, 'You');
+    }
+    
+    // Add names from deprecated members list if available
+    if (Array.isArray(groupData.members)) {
+      for (const member of groupData.members) {
+        if (member.name) {
+          names.set(member.id, member.name);
+        }
+      }
+    }
+    
+    // Get all unique UIDs that might need names
+    const allUids = new Set<string>();
+    
+    // Add UIDs from group members
+    const memberUidsFromGroup = Array.isArray(groupData.members) && groupData.members.length > 0
+      ? groupData.members.map((m) => m.id)
+      : Object.keys(groupData.membersByUid || {});
+    
+    memberUidsFromGroup.forEach(uid => allUids.add(uid));
+    
+    // Add UIDs from ping responses
+    for (const ping of pings) {
+      if (ping.responses) {
+        Object.keys(ping.responses).forEach(uid => allUids.add(uid));
+      }
+    }
+    
+    // Fetch missing names from database
+    for (const uid of allUids) {
+      if (!names.has(uid)) {
+        try {
+          const snap = await get(ref(database, `users/${uid}/displayName`));
+          if (snap.exists()) {
+            const name = String(snap.val());
+            if (name && name.trim().length > 0) {
+              names.set(uid, name);
+            }
+          }
+        } catch {
+          // Ignore errors, will use fallback
+        }
+      }
+    }
+    
+    setMemberNames(names);
   };
 
   const subscribeToGroup = () => {
@@ -116,7 +194,7 @@ export default function GroupDetailScreen() {
     <SafeAreaView className="flex-1 bg-gray-900">
       <Stack.Screen
         options={{
-          headerTitle: () => (group ? <HeaderTitle group={group} /> : null),
+           headerTitle: () => (group ? <HeaderTitle group={group} memberNames={memberNames} /> : null),
           headerLeft: () => (
             <TouchableOpacity
               onPress={() => router.back()}
@@ -135,9 +213,9 @@ export default function GroupDetailScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         {/* Currently Playing Card */}
         {group.game === 'League of Legends' && (
-          <View className="px-6 pb-4">
-            <CurrentlyPlayingCard group={group} />
-          </View>
+           <View className="px-6 pb-4">
+             <CurrentlyPlayingCard group={group} focusTick={focusTick} memberNames={memberNames} />
+           </View>
         )}
 
         {/* Ping Button */}
@@ -146,6 +224,7 @@ export default function GroupDetailScreen() {
             onSend={async (scheduledAtMs) => {
               await handlePing(scheduledAtMs);
             }}
+            focusTick={focusTick}
           />
         </View>
 
@@ -156,14 +235,15 @@ export default function GroupDetailScreen() {
               <Text className="mb-2 text-lg font-semibold text-white">
                 Active Pings
               </Text>
-              {pings.map((ping) => (
-                <PingCard
-                  key={ping.id}
-                  ping={ping}
-                  group={group}
-                  groupId={group.id}
-                />
-              ))}
+               {pings.map((ping) => (
+                 <PingCard
+                   key={ping.id}
+                   ping={ping}
+                   group={group}
+                   groupId={group.id}
+                   memberNames={memberNames}
+                 />
+               ))}
             </>
           )}
         </View>
@@ -193,10 +273,12 @@ function PingCard({
   ping,
   group,
   groupId,
+  memberNames,
 }: {
   ping: any;
   group: Group;
   groupId: string;
+  memberNames: Map<string, string>;
 }) {
   const createdAt = ping.createdAtMs as number;
   // Use scheduled time if present; else fall back to createdAt
@@ -215,53 +297,17 @@ function PingCard({
   const nextRound: string[] = [];
   const declined: string[] = [];
   const pending: string[] = [];
-  const uidToName = new Map<string, string>();
-  
-  // Populate names from deprecated members list if available
-  for (const m of group.members ?? []) uidToName.set(m.id, m.name);
   
   const viewerUid = auth.currentUser?.uid;
-  if (viewerUid && !uidToName.has(viewerUid)) uidToName.set(viewerUid, 'You');
 
   const memberUidsFromGroup =
     Array.isArray(group.members) && group.members.length > 0
       ? group.members.map((m) => m.id)
       : Object.keys(group.membersByUid || {});
-  const allUids = new Set<string>([
+  const allUids = [...new Set([
     ...Object.keys(responses),
     ...memberUidsFromGroup,
-  ]);
-  
-  // For users without names in the map, try to fetch from database or use fallback
-  const [memberNames, setMemberNames] = React.useState<Map<string, string>>(uidToName);
-  
-  React.useEffect(() => {
-    const loadMissingNames = async () => {
-      const updatedNames = new Map(uidToName);
-      let hasUpdates = false;
-      
-      for (const uid of allUids) {
-        if (!updatedNames.has(uid)) {
-          try {
-            const snap = await get(ref(database, `users/${uid}/displayName`));
-            if (snap.exists()) {
-              const name = String(snap.val());
-              if (name && name.trim().length > 0) {
-                updatedNames.set(uid, name);
-                hasUpdates = true;
-              }
-            }
-          } catch {}
-        }
-      }
-      
-      if (hasUpdates) {
-        setMemberNames(updatedNames);
-      }
-    };
-    
-    loadMissingNames();
-  }, [ping.id, allUids.size]);
+  ])];
 
   const selectedTargets: number[] = [];
   for (const uid of allUids) {
@@ -304,6 +350,7 @@ function PingCard({
 
   const meSelected = viewerUid ? !!responses[viewerUid] : false;
   // const selectedCount = selectedTargets.length;
+  const selectedCount = selectedTargets.length;
   const earliestSelectedMs =
     selectedTargets.length > 0 ? Math.min(...selectedTargets) : baseTimeMs;
   const earliestSelectedLabel = TimeService.formatLocalTime(earliestSelectedMs);
@@ -316,6 +363,11 @@ function PingCard({
     meSelected || viewerUid === ping.createdBy
       ? 'Change start time'
       : 'Will you join?';
+
+  // Hide card if no one selected a concrete time
+  if (selectedCount === 0) {
+    return null;
+  }
 
   return (
     <View className="mb-3 rounded-lg bg-gray-800 p-4">
@@ -333,27 +385,27 @@ function PingCard({
         className="mt-2 text-xl font-extrabold text-white"
         numberOfLines={2}
       >
-        {earliestNames.length > 0
+        {selectedCount === 1 && earliestNames.length > 0
+          ? `${earliestNames[0]} suggest playing at ${earliestSelectedLabel}`
+          : earliestNames.length > 0
           ? `${earliestNames.join(', ')} start playing at ${earliestSelectedLabel}`
           : `Start playing at ${earliestSelectedLabel}`}
       </Text>
 
       {/* Gathering time */}
       <View className="mb-3">
-        {sorted.length > 0 && (
-          <View className="mb-2 mt-3">
-            {sorted.map(([timeLabel, names]: [string, string[]]) => (
-              <View key={timeLabel} className="mb-1 flex-row items-center">
-                <Text className="mr-2 text-base font-semibold text-white">
-                  {timeLabel}
-                </Text>
-                <Text className="text-sm text-gray-300">
-                  {names.join(', ')}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
+        <View className="mb-2 mt-3">
+          {sorted.map(([timeLabel, names]: [string, string[]]) => (
+            <View key={timeLabel} className="mb-1 flex-row items-center">
+              <Text className="mr-2 text-base font-semibold text-white">
+                {timeLabel}
+              </Text>
+              <Text className="text-sm text-gray-300">
+                {names.join(', ')}
+              </Text>
+            </View>
+          ))}
+        </View>
         {nextRound.length > 0 && (
           <View className="mb-1 flex-row items-center">
             <Text className="mr-2 text-sm font-semibold text-purple-400">
@@ -468,58 +520,27 @@ function TextButton({
   );
 }
 
-function HeaderTitle({ group }: { group: Group }) {
-  const [members, setMembers] = React.useState<
-    Array<{ uid: string; name: string }>
-  >([]);
-
-  React.useEffect(() => {
-    let cancelled = false;
-    const loadNames = async () => {
-      // Prefer deprecated display list if present (older groups)
-      const displayList = Array.isArray(group.members)
-        ? group.members
-            .map((m) => ({ uid: m.id, name: m.name }))
-            .filter((m) => !!m.name)
-        : [];
-      if (displayList.length > 0) {
-        if (!cancelled) setMembers(displayList);
-        return;
+function HeaderTitle({ group, memberNames }: { group: Group; memberNames: Map<string, string> }) {
+  // Get member list from memberNames
+  const members: Array<{ uid: string; name: string }> = [];
+  
+  // Prefer deprecated display list if present (older groups)
+  if (Array.isArray(group.members) && group.members.length > 0) {
+    for (const member of group.members) {
+      if (member.name) {
+        members.push({ uid: member.id, name: member.name });
       }
-
-      const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
-      if (uids.length === 0) {
-        if (!cancelled) setMembers([]);
-        return;
+    }
+  } else {
+    // Use membersByUid with resolved names
+    const uids = group.membersByUid ? Object.keys(group.membersByUid) : [];
+    for (const uid of uids) {
+      const name = memberNames.get(uid);
+      if (name) {
+        members.push({ uid, name });
       }
-
-      const currentUid = auth.currentUser?.uid;
-      const resolved: Array<{ uid: string; name: string }> = [];
-      for (const uid of uids) {
-        if (uid === currentUid) {
-          resolved.push({ uid, name: 'You' });
-          continue;
-        }
-        try {
-          const snap = await get(ref(database, `users/${uid}/displayName`));
-          if (snap.exists()) {
-            const name = String(snap.val());
-            if (name && name.trim().length > 0) {
-              resolved.push({ uid, name });
-            }
-          }
-        } catch {}
-      }
-      if (!cancelled) setMembers(resolved);
-    };
-
-    loadNames();
-    return () => {
-      cancelled = true;
-    };
-  }, [group.members, group.membersByUid]);
-
-  // Note: Riot game status polling is now handled by the CurrentlyPlayingCard component
+    }
+  }
 
   const fallbackCount = (group.members?.length ??
     (group.membersByUid
@@ -547,119 +568,143 @@ function HeaderTitle({ group }: { group: Group }) {
 // Scheduling widget for PING
 function SchedulePing({
   onSend,
+  focusTick,
 }: {
   onSend: (scheduledAtMs?: number) => Promise<void>;
+  focusTick: number;
 }) {
   const [time, setTime] = React.useState<Date>(TimeService.getNextRounded10Minutes());
+  React.useEffect(() => {
+    // Reset to next rounded time on focus
+    setTime(TimeService.getNextRounded10Minutes());
+  }, [focusTick]);
 
-  const incHour = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours() + 1,
-          t.getMinutes(),
-          0,
-          0,
-        ),
-    );
-  const decHour = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours() - 1,
-          t.getMinutes(),
-          0,
-          0,
-        ),
-    );
-  const incMin = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours(),
-          t.getMinutes() + 10,
-          0,
-          0,
-        ),
-    );
-  const decMin = () =>
-    setTime(
-      (t) =>
-        new Date(
-          t.getFullYear(),
-          t.getMonth(),
-          t.getDate(),
-          t.getHours(),
-          t.getMinutes() - 10,
-          0,
-          0,
-        ),
-    );
-
-  // label kept for possible future preview text
-  const send = () => onSend(time.getTime());
+  const isPast = time.getTime() <= Date.now();
+  const send = () => {
+    if (isPast) return;
+    onSend(time.getTime());
+  };
 
   return (
     <View className="rounded-lg bg-blue-600 p-4">
       <View className="flex-row items-center justify-between">
         {/* Left block: Icon/Title and Send button */}
-        <View className="flex-1 items-center justify-center pr-4">
-          <View className="mb-3 flex-row items-center justify-center">
-            <Ionicons name="game-controller" size={32} color="white" />
-            <Text className="ml-2 text-xl font-bold text-white">PING</Text>
+        <View className="flex-1 justify-center pr-4">
+          <View className="mb-3 flex-row items-center">
+            <Ionicons name="time" size={20} color="white" />
+            <Text className="ml-2 text-lg font-semibold text-white">Suggest a playtime</Text>
           </View>
           <TouchableOpacity
-            className="items-center rounded bg-white px-6 py-3"
+            className={`items-center rounded px-6 py-3 ${isPast ? 'bg-white/40' : 'bg-white'}`}
             onPress={send}
+            disabled={isPast}
           >
             <Text className="font-semibold text-blue-700">Send</Text>
           </TouchableOpacity>
+          {isPast && (
+            <Text className="mt-2 text-center text-xs text-white/90">
+              Select a future time to enable Send
+            </Text>
+          )}
         </View>
 
         {/* Right block: time pickers */}
         <View className="flex-row items-center">
           <View className="mx-4 items-center">
             <TouchableOpacity
-              onPress={incHour}
-              className="mb-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours() + 1,
+                    t.getMinutes(),
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mb-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-up" size={18} color="white" />
+              <Ionicons name="chevron-up" size={20} color="#1D4ED8" />
             </TouchableOpacity>
-            <Text className="my-1 text-2xl font-semibold text-white">
-              {String(time.getHours()).padStart(2, '0')}
-            </Text>
+            <View className="my-1 w-12 items-center">
+              <Text
+                className="text-2xl font-semibold text-white"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {String(time.getHours()).padStart(2, '0')}
+              </Text>
+            </View>
             <TouchableOpacity
-              onPress={decHour}
-              className="mt-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours() - 1,
+                    t.getMinutes(),
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mt-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-down" size={18} color="white" />
+              <Ionicons name="chevron-down" size={20} color="#1D4ED8" />
             </TouchableOpacity>
           </View>
           <Text className="text-2xl font-bold text-white">:</Text>
           <View className="mx-4 items-center">
             <TouchableOpacity
-              onPress={incMin}
-              className="mb-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours(),
+                    t.getMinutes() + 10,
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mb-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-up" size={18} color="white" />
+              <Ionicons name="chevron-up" size={20} color="#1D4ED8" />
             </TouchableOpacity>
-            <Text className="my-1 text-2xl font-semibold text-white">
-              {String(time.getMinutes()).padStart(2, '0')}
-            </Text>
+            <View className="my-1 w-12 items-center">
+              <Text
+                className="text-2xl font-semibold text-white"
+                style={{ fontVariant: ['tabular-nums'] }}
+              >
+                {String(time.getMinutes()).padStart(2, '0')}
+              </Text>
+            </View>
             <TouchableOpacity
-              onPress={decMin}
-              className="mt-2 size-9 items-center justify-center rounded-lg bg-blue-700 active:opacity-80"
+              onPress={() =>
+                setTime((t) =>
+                  new Date(
+                    t.getFullYear(),
+                    t.getMonth(),
+                    t.getDate(),
+                    t.getHours(),
+                    t.getMinutes() - 10,
+                    0,
+                    0,
+                  ),
+                )
+              }
+              className="mt-2 size-10 items-center justify-center rounded-lg bg-white active:opacity-80"
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Ionicons name="chevron-down" size={18} color="white" />
+              <Ionicons name="chevron-down" size={20} color="#1D4ED8" />
             </TouchableOpacity>
           </View>
         </View>
@@ -679,7 +724,7 @@ function formatElapsedTime(elapsedMinutes: number): string {
 }
 
 // Currently Playing Card Component
-function CurrentlyPlayingCard({ group }: { group: Group }) {
+function CurrentlyPlayingCard({ group, focusTick, memberNames }: { group: Group; focusTick: number; memberNames: Map<string, string> }) {
   const [playingMembers, setPlayingMembers] = React.useState<
     Array<{ uid: string; name: string; elapsedMinutes: number }>
   >([]);
@@ -710,30 +755,16 @@ function CurrentlyPlayingCard({ group }: { group: Group }) {
           // Check game status
           try {
             const res = await getActiveGameStatus(puuid, region as any);
-            if (res.inGame && typeof res.elapsedMinutes === 'number') {
-              // Get user's display name
-              let name = 'Unknown User';
-              const currentUid = auth.currentUser?.uid;
-              if (uid === currentUid) {
-                name = 'You';
-              } else {
-                try {
-                  const nameSnap = await get(ref(database, `users/${uid}/displayName`));
-                  if (nameSnap.exists()) {
-                    const displayName = String(nameSnap.val());
-                    if (displayName && displayName.trim().length > 0) {
-                      name = displayName;
-                    }
-                  }
-                } catch {}
-              }
-              
-              playing.push({
-                uid,
-                name,
-                elapsedMinutes: res.elapsedMinutes
-              });
-            }
+             if (res.inGame && typeof res.elapsedMinutes === 'number') {
+               // Get user's display name from memberNames
+               const name = memberNames.get(uid) || 'Unknown User';
+               
+               playing.push({
+                 uid,
+                 name,
+                 elapsedMinutes: res.elapsedMinutes
+               });
+             }
           } catch (error) {
             // Silently handle individual player errors
             console.log(`Failed to get game status for ${uid}:`, error);
@@ -759,12 +790,23 @@ function CurrentlyPlayingCard({ group }: { group: Group }) {
       cancelled = true;
       if (interval) clearInterval(interval);
     };
-  }, [group.game, group.membersByUid]);
+  }, [group.game, Object.keys(group.membersByUid || {}).sort().join(','), focusTick]);
 
   // Don't render if no one is playing
   if (playingMembers.length === 0) {
     return null;
   }
+
+  const currentUid = auth.currentUser?.uid;
+
+  const handleSendNextGame = async (targetUid: string) => {
+    try {
+      await sendNextGameNotification({ groupId: group.id, targetUid });
+      Alert.alert('Sent', 'Request sent');
+    } catch (e: any) {
+      Alert.alert('Error', e?.message || 'Failed to send');
+    }
+  };
 
   return (
     <View className="rounded-lg bg-purple-800 p-4">
@@ -780,9 +822,16 @@ function CurrentlyPlayingCard({ group }: { group: Group }) {
           <Text className="flex-1 text-base text-white">
             {member.name}
           </Text>
-          <Text className="text-sm text-purple-300">
+          <Text className="mr-2 text-sm text-purple-300">
             Playing for: {formatElapsedTime(member.elapsedMinutes)}
           </Text>
+          <TouchableOpacity
+            className="rounded bg-blue-600 px-3 py-2 active:opacity-80"
+            disabled={currentUid === member.uid}
+            onPress={() => handleSendNextGame(member.uid)}
+          >
+            <Text className="text-xs font-semibold text-white">cmttng</Text>
+          </TouchableOpacity>
         </View>
       ))}
     </View>

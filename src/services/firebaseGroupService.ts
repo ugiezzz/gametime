@@ -399,7 +399,9 @@ export class FirebaseGroupService {
 
     const now = Date.now();
     const base = typeof scheduledAtMs === 'number' ? scheduledAtMs : now;
-    const expires = base + TimeService.HOUR_MS;
+    // Keep ping visible until 1 hour after the last selectable time (0,5,15 -> +15m)
+    const lastSelectableOffsetMs = 15 * TimeService.MINUTE_MS;
+    const expires = base + lastSelectableOffsetMs + TimeService.HOUR_MS;
     const pingsRef = ref(database, `${this.GROUPS_REF}/${groupId}/pings`);
     const newPingRef = push(pingsRef);
     const pingId = newPingRef.key!;
@@ -471,15 +473,12 @@ export class FirebaseGroupService {
   ): () => void {
     const pingsRef = ref(database, `${this.GROUPS_REF}/${groupId}/pings`);
     const unsubscribe = onValue(pingsRef, (snapshot) => {
-      const oneHourAgo = Date.now() - TimeService.HOUR_MS;
       const list: Ping[] = [];
       snapshot.forEach((child) => {
         const val = child.val();
         if (
           val &&
           typeof val.expiresAtMs === 'number' &&
-          typeof val.createdAtMs === 'number' &&
-          val.createdAtMs >= oneHourAgo &&
           val.expiresAtMs > Date.now()
         ) {
           list.push({ ...val, id: child.key! });
